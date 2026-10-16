@@ -37,6 +37,11 @@ use crate::game::shared_game_state::WindowMode;
 use crate::game::Game;
 use crate::input::touch_controls::TouchEvent;
 
+/// CAVESTORY_TOUCH=1: the mouse sends touch events, to try the phone controls on a computer.
+fn touch_emulated() -> bool {
+    std::env::var("CAVESTORY_TOUCH").as_deref() == Ok("1")
+}
+
 fn handle_err_impl(result: GameResult, shutdown_requested: &mut bool) {
     if let Err(e) = result {
         log::error!("{}", e);
@@ -64,6 +69,10 @@ pub struct SDL2Backend {
 impl SDL2Backend {
     pub fn new(window_params: WindowParams) -> GameResult<Box<dyn Backend>> {
         sdl2::hint::set("SDL_JOYSTICK_THREAD", "1");
+
+        if touch_emulated() {
+            sdl2::hint::set("SDL_MOUSE_TOUCH_EVENTS", "1");
+        }
 
         #[cfg(target_os = "ios")]
         {
@@ -643,7 +652,7 @@ impl BackendEventLoop for SDL2EventLoop {
         // SDL has no API for this so we need to guess :)
         ctx.flags.set_supports_windowed_fullscreen(!IS_MOBILE && !IS_CONSOLE);
         // TODO: implement touch support in SDL backend (only iOS reports its touch screen so far)
-        ctx.flags.set_has_touch_screen(cfg!(target_os = "ios"));
+        ctx.flags.set_has_touch_screen(cfg!(target_os = "ios") || touch_emulated());
         ctx.flags.set_supports_insets(cfg!(any(target_os = "android", target_os = "ios")));
         ctx.flags.set_form_factor(match (IS_MOBILE, IS_CONSOLE) {
             (true, _) => DeviceFormFactor::Mobile,

@@ -1,9 +1,10 @@
-# Builds the iOS app icons from doukutsu-rs's macOS icon: crops to its opaque rounded square,
-# fills the see-through corners with the icon's background colour (iOS rounds the corners itself)
-# and writes every size the bundle needs.
+# Builds the iOS app icons from a 1024x1024 source, by default the Curly icon from make_curly_icon.ps1.
+# A source with see-through rounded corners (like res/macos/512x512@2x.png) is cropped to its opaque
+# square and the corners filled with its background colour (iOS rounds the corners itself).
+# Writes every size the bundle needs.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File ios/make_icons.ps1
 param(
-    [string]$Source = "$PSScriptRoot\..\res\macos\512x512@2x.png",
+    [string]$Source = "$PSScriptRoot\curly-icon-1024.png",
     [string]$OutDir = "$PSScriptRoot\icons"
 )
 

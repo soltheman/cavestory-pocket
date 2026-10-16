@@ -175,6 +175,35 @@
       }
     },
     "controls_menu": {
+      "touch_menu": {
+        "entry": "Touch controls...",
+        "opacity": {
+          "entry": "Opacity:",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "full": "Full"
+        },
+        "size": {
+          "entry": "Button size:",
+          "small": "Small",
+          "normal": "Normal",
+          "large": "Large",
+          "huge": "Huge"
+        },
+        "move": "Move buttons...",
+        "reset": "Reset button positions",
+        "editor_hint": "Drag the buttons to move them",
+        "editor_reset": "Reset",
+        "editor_done": "Done",
+        "labels": {
+          "dpad": "Move",
+          "jump": "Jump",
+          "shoot": "Shoot",
+          "inventory": "Items",
+          "pause": "Pause"
+        }
+      },
       "select_player": {
         "entry": "Select player:",
         "player_1": "Player 1",

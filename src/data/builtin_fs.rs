@@ -111,6 +111,7 @@ impl BuiltinFS {
                         include_bytes!("builtin/organya-wavetable-doukutsu.bin"),
                     ),
                     FSNode::File("touch.png", include_bytes!("builtin/touch.png")),
+                    FSNode::File("touch_plate.png", include_bytes!("builtin/touch_plate.png")),
                     FSNode::Directory(
                         "builtin_data",
                         vec![

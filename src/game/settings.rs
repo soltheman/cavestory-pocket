@@ -10,6 +10,7 @@ use crate::input::combined_player_controller::CombinedPlayerController;
 use crate::input::gamepad_player_controller::GamepadController;
 use crate::input::keyboard_player_controller::KeyboardController;
 use crate::input::player_controller::PlayerController;
+use crate::input::touch_controls::TouchLayout;
 use crate::input::touch_player_controller::TouchPlayerController;
 use crate::sound::InterpolationMode;
 
@@ -30,6 +31,8 @@ pub struct Settings {
     pub touch_controls: bool,
     #[serde(default = "default_true")]
     pub display_touch_controls: bool,
+    #[serde(default)]
+    pub touch_layout: TouchLayout,
     pub soundtrack: String,
     #[serde(default = "default_vol")]
     pub bgm_volume: f32,
@@ -113,12 +116,13 @@ fn default_true() -> bool {
 
 #[inline(always)]
 fn current_version() -> u32 {
-    26
+    27
 }
 
 #[inline(always)]
 fn default_aspect_ratio() -> String {
-    "default".to_owned()
+    // Phones fill their wide screen, so the touch controls sit beside the action instead of on it.
+    if cfg!(target_os = "ios") { "unrestricted" } else { "default" }.to_owned()
 }
 
 #[inline(always)]
@@ -404,6 +408,14 @@ impl Settings {
             self.window_geometry = None;
         }
 
+        if self.version == 26 {
+            self.version = 27;
+            // iOS switched to a widescreen default; only move players who never picked a ratio.
+            if self.aspect_ratio == "default" {
+                self.aspect_ratio = default_aspect_ratio();
+            }
+        }
+
         if self.version != initial_version {
             log::info!("Upgraded configuration file from version {} to {}.", initial_version, self.version);
         }
@@ -491,6 +503,7 @@ impl Default for Settings {
             motion_interpolation: true,
             touch_controls: cfg!(any(target_os = "android", target_os = "ios")),
             display_touch_controls: true,
+            touch_layout: TouchLayout::default(),
             soundtrack: "Organya".to_string(),
             bgm_volume: 1.0,
             sfx_volume: 1.0,

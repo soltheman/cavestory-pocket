@@ -21,6 +21,16 @@ The Steam 2026 update's format is not supported yet (upstream issue #365).
 
 Saves and settings live in `user` next to `data`, and logs in `logs`, all visible in the Files app.
 
+## Touch controls
+
+Options > Controls > Touch controls sets the buttons' opacity and size, and "Move buttons..." lets you
+drag each one into place. The layout is saved in `user/settings.json` (`touch_layout`).
+
+To try the phone controls on a PC build, set `CAVESTORY_TOUCH=1` (the mouse acts as a finger) and
+start with `--window-width 1266 --window-height 585` for an iPhone-shaped window; `CAVESTORY_DATA_DIR`
+points at a copy of the game's `data` folder.
+
 ## Icons
 
-`make_icons.ps1` regenerates `icons/` from `res/macos/512x512@2x.png`.
+`make_curly_icon.ps1` draws the Curly icon (`curly-icon-1024.png`, original pixel art), and
+`make_icons.ps1` turns it into the sizes in `icons/`.

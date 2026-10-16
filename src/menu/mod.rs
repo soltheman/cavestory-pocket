@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::common::{Color, Rect};
 use crate::components::draw_common::{draw_number, Alignment};
@@ -8,6 +9,7 @@ use crate::framework::graphics;
 use crate::game::shared_game_state::{GameDifficulty, MenuCharacter, SharedGameState};
 use crate::graphics::font::{Font, SymbolsOwned};
 use crate::input::combined_menu_controller::CombinedMenuController;
+use crate::input::touch_controls::TAP_SLOP;
 use crate::menu::save_select_menu::MenuSaveInfo;
 
 pub mod controls_menu;
@@ -15,6 +17,7 @@ pub mod coop_menu;
 pub mod pause_menu;
 pub mod save_select_menu;
 pub mod settings_menu;
+pub mod touch_layout_editor;
 
 const MENU_MIN_PADDING: f32 = 30.0;
 
@@ -45,9 +48,18 @@ pub enum MenuEntry {
     Spacer(f64),
 }
 
+/// Set while touch controls are on: one-line entries get taller so they are easier to tap.
+static TOUCH_ROWS: AtomicBool = AtomicBool::new(false);
+const TOUCH_ROW_PADDING: f64 = 6.0;
+
+/// Called once the settings are loaded, before any menu measures itself.
+pub fn set_touch_rows(enabled: bool) {
+    TOUCH_ROWS.store(enabled, Ordering::Relaxed);
+}
+
 impl MenuEntry {
     pub fn height(&self) -> f64 {
-        match self {
+        let height = match self {
             MenuEntry::Hidden => 0.0,
             MenuEntry::Title(_, _, _) => 16.0,    // individual line
             MenuEntry::LongText(_, _, _) => 16.0, // individual line
@@ -64,6 +76,24 @@ impl MenuEntry {
             MenuEntry::PlayerSkin => 24.0,
             MenuEntry::Control(_, _) => 16.0,
             MenuEntry::Spacer(height) => *height,
+        };
+
+        height + self.touch_padding()
+    }
+
+    /// Extra height given to tappable one-line entries while touch controls are on.
+    fn touch_padding(&self) -> f64 {
+        match self {
+            MenuEntry::Active(_)
+            | MenuEntry::Toggle(_, _)
+            | MenuEntry::Options(_, _, _)
+            | MenuEntry::OptionsBar(_, _)
+            | MenuEntry::Control(_, _)
+                if TOUCH_ROWS.load(Ordering::Relaxed) =>
+            {
+                TOUCH_ROW_PADDING
+            }
+            _ => 0.0,
         }
     }
 
@@ -112,6 +142,12 @@ pub struct Menu<T: std::cmp::PartialEq> {
     pub non_interactive: bool,
     pub center_options: bool,
     pub symbols: Option<SymbolsOwned>,
+    /// Set once a swipe has scrolled the menu; keys hand scrolling back to the selection.
+    touch_scrolling: bool,
+    /// How far a swipe has moved the menu up, in canvas pixels.
+    touch_scroll: f32,
+    /// The swiping touch: its id, where it went down, and the scroll offset at that moment.
+    touch_drag: Option<(u64, f64, f32)>,
 }
 
 impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
@@ -131,6 +167,9 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
             non_interactive: false,
             center_options: false,
             symbols: None,
+            touch_scrolling: false,
+            touch_scroll: 0.0,
+            touch_drag: None,
         }
     }
 
@@ -388,7 +427,7 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                     rect.right = rect.left + 16;
                     rect.bottom = rect.top + 16;
 
-                    batch.add_rect(options_x, computed_y + 3.0 + selected_y, &rect);
+                    batch.add_rect(options_x, computed_y + 3.0 + selected_y + self.selected_half_padding(), &rect);
 
                     batch.draw(ctx)?;
                 } else {
@@ -425,7 +464,7 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
 
                 let batch = state.texture_set.get_or_load_batch(ctx, &state.constants, menu_texture)?;
 
-                batch.add_rect(options_x, computed_y + 4.0 + selected_y, &character_rect[self.anim_num as usize]);
+                batch.add_rect(options_x, computed_y + 4.0 + selected_y + self.selected_half_padding(), &character_rect[self.anim_num as usize]);
 
                 batch.draw(ctx)?;
             }
@@ -433,6 +472,10 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
 
         y = computed_y + 8.0;
         for (_, entry) in &self.entries {
+            // Centre the text in rows made taller for touch.
+            let half_padding = entry.touch_padding() as f32 / 2.0;
+            y += half_padding;
+
             match entry {
                 MenuEntry::Active(name) | MenuEntry::DisabledWhite(name) => {
                     state.font.builder().with_symbols(symbols).position(options_x + 20.0, y).draw(
@@ -540,6 +583,8 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                         &state.constants,
                         &mut state.texture_set,
                     )?;
+
+                    self.draw_touch_arrows(state, ctx, y)?;
                 }
                 MenuEntry::DescriptiveOptions(name, index, value, description) => {
                     let value_text = if let Some(text) = value.get(*index) { text } else { "???" };
@@ -566,6 +611,8 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                         .position(self.x as f32 + 20.0, y + 16.0)
                         .color((0xc0, 0xc0, 0xff, 0xff))
                         .draw(description_text, ctx, &state.constants, &mut state.texture_set)?;
+
+                    self.draw_touch_arrows(state, ctx, y)?;
                 }
                 MenuEntry::OptionsBar(name, percent) => {
                     state.font.builder().with_symbols(symbols).position(self.x as f32 + 20.0, y).draw(
@@ -759,10 +806,16 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 _ => {}
             }
 
-            y += entry.height() as f32;
+            y += entry.height() as f32 - half_padding;
         }
 
-        if self.height as f32 > state.canvas_size.1 && self.selected != self.entries.last().unwrap().0 {
+        let more_below = if self.touch_scrolling {
+            self.touch_scroll < self.max_touch_scroll(state) - 0.5
+        } else {
+            self.height as f32 > state.canvas_size.1 && self.selected != self.entries.last().unwrap().0
+        };
+
+        if more_below {
             // draw down triangle
             let batch = state.texture_set.get_or_load_batch(ctx, &state.constants, "triangles")?;
             batch.add_rect(self.x as f32 + 6.0, state.canvas_size.1 - 10.0, &Rect::new_size(0, 0, 5, 5));
@@ -806,17 +859,19 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
             return MenuSelectionResult::Canceled;
         }
 
+        self.handle_touch_scroll(state);
+
         let computed_y = self.compute_y(state, None);
 
         let up_clicked = if computed_y < 0.0 {
-            state.touch_controls.consume_click_in(Rect::new_size(self.x, 7, 32, 32))
+            state.touch_controls.consume_tap_in(Rect::new_size(self.x, 7, 32, 32))
         } else {
             false
         };
 
         let down_clicked =
             if self.height as f32 > state.canvas_size.1 && self.selected != self.entries.last().unwrap().0 {
-                state.touch_controls.consume_click_in(Rect::new_size(self.x, state.canvas_size.1 as isize - 10, 32, 32))
+                state.touch_controls.consume_tap_in(Rect::new_size(self.x, state.canvas_size.1 as isize - 10, 32, 32))
             } else {
                 false
             };
@@ -824,6 +879,8 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
         if (controller.trigger_up() || controller.trigger_down() || down_clicked || up_clicked)
             && !self.entries.is_empty()
         {
+            // Moving the selection scrolls the menu to it again.
+            self.touch_scrolling = false;
             state.sound_manager.play_sfx(1);
 
             let mut selected = self.entries.iter().position(|(idx, _)| *idx == self.selected).ok_or(0).unwrap();
@@ -866,15 +923,20 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
             }
         }
 
-        let mut y = self.y as f32 + 8.0;
+        // Taps are matched against where the entries are drawn, including any scrolling.
+        let mut y = self.compute_y(state, None) + 8.0;
         for (id, entry) in self.entries.iter_mut() {
             let idx = id.clone();
-            let entry_bounds = Rect::new_size(self.x, y as isize, self.width as isize, entry.height() as isize);
+            let entry_height = match self.height_overrides.iter().find(|(entry_id, _)| *entry_id == idx) {
+                Some((_, height)) => *height,
+                None => entry.height(),
+            } as isize;
+            let entry_bounds = Rect::new_size(self.x, y as isize, self.width as isize, entry_height);
             let right_entry_bounds =
-                Rect::new_size(self.x + self.width as isize, y as isize, self.width as isize, entry.height() as isize);
+                Rect::new_size(self.x + self.width as isize, y as isize, self.width as isize, entry_height);
             let left_entry_bounds =
-                Rect::new_size(self.x - self.width as isize, y as isize, self.width as isize, entry.height() as isize);
-            y += entry.height() as f32;
+                Rect::new_size(self.x - self.width as isize, y as isize, self.width as isize, entry_height);
+            y += entry_height as f32;
 
             match entry {
                 MenuEntry::Active(_)
@@ -885,7 +947,7 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 | MenuEntry::NewSave
                 | MenuEntry::PlayerSkin
                     if (self.selected == idx && controller.trigger_ok())
-                        || state.touch_controls.consume_click_in(entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(18);
                     self.selected = idx.clone();
@@ -893,7 +955,7 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 }
                 MenuEntry::Options(_, _, _) | MenuEntry::OptionsBar(_, _)
                     if (self.selected == idx && controller.trigger_left())
-                        || state.touch_controls.consume_click_in(left_entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(left_entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(1);
                     self.selected = idx.clone();
@@ -901,7 +963,7 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 }
                 MenuEntry::Options(_, _, _) | MenuEntry::OptionsBar(_, _)
                     if (self.selected == idx && controller.trigger_right())
-                        || state.touch_controls.consume_click_in(right_entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(right_entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(1);
                     self.selected = idx.clone();
@@ -909,21 +971,21 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 }
                 MenuEntry::DescriptiveOptions(_, _, _, _)
                     if (self.selected == idx && controller.trigger_left())
-                        || state.touch_controls.consume_click_in(left_entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(left_entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(1);
                     return MenuSelectionResult::Left(self.selected.clone(), entry, -1);
                 }
                 MenuEntry::DescriptiveOptions(_, _, _, _) | MenuEntry::SaveData(_)
                     if (self.selected == idx && controller.trigger_right())
-                        || state.touch_controls.consume_click_in(right_entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(right_entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(1);
                     return MenuSelectionResult::Right(self.selected.clone(), entry, 1);
                 }
                 MenuEntry::Control(_, _)
                     if (self.selected == idx && controller.trigger_ok())
-                        || state.touch_controls.consume_click_in(entry_bounds) =>
+                        || state.touch_controls.consume_tap_in(entry_bounds) =>
                 {
                     state.sound_manager.play_sfx(18);
                     self.selected = idx.clone();
@@ -936,17 +998,78 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
         MenuSelectionResult::None
     }
 
+    /// "<" and ">" beside an entry whose value changes when either side of the menu is tapped.
+    fn draw_touch_arrows(&self, state: &mut SharedGameState, ctx: &mut Context, y: f32) -> GameResult {
+        if !ctx.flags.has_touch_screen() {
+            return Ok(());
+        }
+
+        let symbols = self.symbols.as_ref().map(|s| s.as_ref());
+        state.font.builder().with_symbols(symbols).x(self.x as f32 - 25.0).y(y).shadow(true).draw(
+            "<",
+            ctx,
+            &state.constants,
+            &mut state.texture_set,
+        )?;
+        state.font.builder().with_symbols(symbols).x((self.x + self.width as isize) as f32 + 15.0).y(y).shadow(true).draw(
+            ">",
+            ctx,
+            &state.constants,
+            &mut state.texture_set,
+        )
+    }
+
+    /// How far a swipe may move the menu up: until its bottom edge clears the bottom of the screen.
+    fn max_touch_scroll(&self, state: &SharedGameState) -> f32 {
+        let base_y = (self.y as f32).max(MENU_MIN_PADDING);
+        (base_y + self.height as f32 + MENU_MIN_PADDING - state.canvas_size.1).max(0.0)
+    }
+
+    /// Swiping up or down scrolls a menu that doesn't fit on the screen.
+    fn handle_touch_scroll(&mut self, state: &SharedGameState) {
+        let max_scroll = self.max_touch_scroll(state);
+
+        match state.touch_controls.points.first() {
+            Some(point) if max_scroll > 0.0 => match self.touch_drag {
+                Some((id, start_y, start_scroll)) if id == point.touch_id => {
+                    if point.travel() >= TAP_SLOP {
+                        self.touch_scrolling = true;
+                        self.touch_scroll = (start_scroll - (point.position.1 - start_y) as f32).clamp(0.0, max_scroll);
+                    }
+                }
+                _ => {
+                    let base_y = (self.y as f32).max(MENU_MIN_PADDING);
+                    self.touch_drag = Some((point.touch_id, point.position.1, base_y - self.compute_y(state, None)));
+                }
+            },
+            _ => self.touch_drag = None,
+        }
+    }
+
     #[inline]
     fn compute_y(&self, state: &SharedGameState, selected_y: Option<f32>) -> f32 {
         let selected_y = selected_y.unwrap_or(self.get_selected_entry_y() as f32);
 
         let mut computed_y = (self.y as f32).max(MENU_MIN_PADDING);
 
+        if self.touch_scrolling {
+            return computed_y - self.touch_scroll.clamp(0.0, self.max_touch_scroll(state));
+        }
+
         if (selected_y + MENU_MIN_PADDING) > state.canvas_size.1 - MENU_MIN_PADDING {
             computed_y -= (selected_y + MENU_MIN_PADDING) - (state.canvas_size.1 - MENU_MIN_PADDING) + 4.0;
         }
 
         computed_y
+    }
+
+    /// Half the touch padding of the selected entry, to line the cursor up with its text.
+    fn selected_half_padding(&self) -> f32 {
+        self.entries
+            .iter()
+            .find(|(id, _)| *id == self.selected)
+            .map(|(_, entry)| entry.touch_padding() as f32 / 2.0)
+            .unwrap_or(0.0)
     }
 
     fn get_selected_entry_y(&self) -> u16 {

@@ -369,7 +369,10 @@ impl SaveSelectMenu {
     }
 
     fn confirm_save_slot(&mut self, state: &mut SharedGameState, ctx: &mut Context) -> GameResult {
-        if state.constants.supports_two_player {
+        // On a touch screen with no controllers, a second player has nothing to play with.
+        let second_player_possible = !state.settings.touch_controls || !ctx.gamepad_context.get_gamepads().is_empty();
+
+        if state.constants.supports_two_player && second_player_possible {
             self.current_menu = CurrentMenu::PlayerCountMenu;
         } else {
             state.reload_resources(ctx)?;

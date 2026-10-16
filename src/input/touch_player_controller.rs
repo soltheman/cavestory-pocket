@@ -3,10 +3,9 @@ use bitfield::bitfield;
 use crate::common::Rect;
 use crate::framework::context::Context;
 use crate::framework::error::GameResult;
-use crate::framework::graphics::screen_insets_scaled;
 use crate::game::shared_game_state::SharedGameState;
 use crate::input::player_controller::PlayerController;
-use crate::input::touch_controls::TouchControlType;
+use crate::input::touch_controls::{TouchButton, TouchControlType, TouchGeometry};
 
 /// A no-op implementation of player controller.
 #[derive(Clone)]
@@ -44,6 +43,9 @@ impl TouchPlayerController {
 
 impl PlayerController for TouchPlayerController {
     fn update(&mut self, state: &mut SharedGameState, ctx: &mut Context) -> GameResult {
+        let layout = &state.settings.touch_layout;
+        let geometry = TouchGeometry::new(ctx, state.canvas_size, state.scale, layout);
+
         match state.touch_controls.control_type {
             TouchControlType::None => {}
             TouchControlType::Dialog => {
@@ -64,180 +66,29 @@ impl PlayerController for TouchPlayerController {
                     self.old_state.set_jump(false);
                 }
 
-                let (_, top, right, _) = screen_insets_scaled(ctx, state.scale);
-
-                let top = 4 + top as isize;
-                let right = 4 + right as isize;
-
+                // Fast-forward is drawn where Inventory is.
                 self.state.set_inventory(
-                    state
-                        .touch_controls
-                        .point_in(Rect::new_size(state.canvas_size.0 as isize - 48 - right, top, 48, 48))
-                        .is_some(),
+                    state.touch_controls.point_in(geometry.rect(layout, TouchButton::Inventory)).is_some(),
                 );
             }
             TouchControlType::Controls => {
-                let (left, _top, right, bottom) = screen_insets_scaled(ctx, state.scale);
-
-                let left = 4 + left as isize;
-                let top = 4 + bottom as isize;
-                let bottom = 4 + bottom as isize;
-                let right = 4 + right as isize;
-
                 self.state.0 = 0;
-                // left
-                self.state.set_left(
-                    self.state.left()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(left, state.canvas_size.1 as isize - bottom - 48 * 2, 48, 48))
-                            .is_some(),
-                );
 
-                // up
-                self.state.set_up(
-                    self.state.up()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(48 + left, state.canvas_size.1 as isize - bottom - 48 * 3, 48, 48))
-                            .is_some(),
-                );
+                for point in &state.touch_controls.points {
+                    if let Some((left, up, right, down)) = geometry.dpad_directions(layout, point) {
+                        self.state.set_left(self.state.left() || left);
+                        self.state.set_up(self.state.up() || up);
+                        self.state.set_right(self.state.right() || right);
+                        self.state.set_down(self.state.down() || down);
+                    }
 
-                // right
-                self.state.set_right(
-                    self.state.right()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(
-                                48 * 2 + left,
-                                state.canvas_size.1 as isize - bottom - 48 * 2,
-                                48,
-                                48,
-                            ))
-                            .is_some(),
-                );
+                    self.state.set_jump(self.state.jump() || point.is_in(geometry.rect(layout, TouchButton::Jump)));
+                    self.state.set_shoot(self.state.shoot() || point.is_in(geometry.rect(layout, TouchButton::Shoot)));
+                    self.state.set_pause(self.state.pause() || point.is_in(geometry.rect(layout, TouchButton::Pause)));
+                }
 
-                // down
-                self.state.set_down(
-                    self.state.down()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(48 + left, state.canvas_size.1 as isize - bottom - 48, 48, 48))
-                            .is_some(),
-                );
-
-                // left+up
-                self.state.set_left(
-                    self.state.left()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(left, state.canvas_size.1 as isize - bottom - 48 * 3, 48, 48))
-                            .is_some(),
-                );
-                self.state.set_up(
-                    self.state.up()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(left, state.canvas_size.1 as isize - bottom - 48 * 3, 48, 48))
-                            .is_some(),
-                );
-
-                // right+up
-                self.state.set_right(
-                    self.state.right()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(
-                                48 * 2 + left,
-                                state.canvas_size.1 as isize - bottom - 48 * 3,
-                                48,
-                                48,
-                            ))
-                            .is_some(),
-                );
-                self.state.set_up(
-                    self.state.up()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(
-                                48 * 2 + left,
-                                state.canvas_size.1 as isize - bottom - 48 * 3,
-                                48,
-                                48,
-                            ))
-                            .is_some(),
-                );
-
-                // left+down
-                self.state.set_left(
-                    self.state.left()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(left, state.canvas_size.1 as isize - 48 - bottom, 48, 48))
-                            .is_some(),
-                );
-                self.state.set_down(
-                    self.state.down()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(left, state.canvas_size.1 as isize - 48 - bottom, 48, 48))
-                            .is_some(),
-                );
-
-                // right+down
-                self.state.set_right(
-                    self.state.right()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(48 * 2 + left, state.canvas_size.1 as isize - 48 - bottom, 48, 48))
-                            .is_some(),
-                );
-                self.state.set_down(
-                    self.state.down()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(48 * 2 + left, state.canvas_size.1 as isize - 48 - bottom, 48, 48))
-                            .is_some(),
-                );
-
-                self.state.set_inventory(
-                    self.state.inventory()
-                        || state.touch_controls.consume_click_in(Rect::new_size(
-                            state.canvas_size.0 as isize - 48 - right,
-                            top,
-                            48,
-                            48,
-                        )),
-                );
-
-                self.state.set_jump(
-                    self.state.jump()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(
-                                state.canvas_size.0 as isize - 48 - right,
-                                state.canvas_size.1 as isize - (48 + 4) - bottom,
-                                48,
-                                48,
-                            ))
-                            .is_some(),
-                );
-                self.state.set_shoot(
-                    self.state.shoot()
-                        || state
-                            .touch_controls
-                            .point_in(Rect::new_size(
-                                state.canvas_size.0 as isize - 48 - right,
-                                state.canvas_size.1 as isize - (48 + 4) * 2 - bottom,
-                                48,
-                                48,
-                            ))
-                            .is_some(),
-                );
-
-                self.state.set_pause(
-                    self.state.pause() || state.touch_controls.point_in(Rect::new_size(0, 0, 40, 40)).is_some(),
-                );
+                let inventory = geometry.rect(layout, TouchButton::Inventory);
+                self.state.set_inventory(state.touch_controls.consume_click_in(inventory));
             }
         }
 

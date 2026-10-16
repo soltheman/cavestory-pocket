@@ -9,7 +9,9 @@ use crate::game::settings::{
 };
 use crate::game::shared_game_state::SharedGameState;
 use crate::input::combined_menu_controller::CombinedMenuController;
+use crate::input::touch_controls::{TouchGeometry, TouchLayout};
 
+use super::touch_layout_editor::TouchLayoutEditor;
 use super::{ControlMenuData, Menu, MenuEntry, MenuSelectionResult};
 
 const FORBIDDEN_SCANCODES: [ScanCode; 12] = [
@@ -35,6 +37,8 @@ enum CurrentMenu {
     RebindMenu,
     ConfirmRebindMenu,
     ConfirmResetMenu,
+    TouchMenu,
+    TouchLayoutEditor,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -43,8 +47,35 @@ enum MainMenuEntry {
     Controller,
     Rebind,
     Rumble,
-    DisplayTouchControls,
+    TouchControls,
     Back,
+}
+
+/// Moves an `Options` entry by `delta`, wrapping around, and returns its new index.
+fn step_option(entry: &mut MenuEntry, delta: isize) -> usize {
+    match entry {
+        MenuEntry::Options(_, value, options) => {
+            *value = (*value as isize + delta).rem_euclid(options.len().max(1) as isize) as usize;
+            *value
+        }
+        _ => 0,
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum TouchMenuEntry {
+    Show,
+    Opacity,
+    Size,
+    Move,
+    Reset,
+    Back,
+}
+
+impl Default for TouchMenuEntry {
+    fn default() -> Self {
+        TouchMenuEntry::Show
+    }
 }
 
 impl Default for MainMenuEntry {
@@ -154,6 +185,8 @@ pub struct ControlsMenu {
     rebind: Menu<RebindMenuEntry>,
     confirm_rebind: Menu<usize>,
     confirm_reset: Menu<ConfirmResetMenuEntry>,
+    touch: Menu<TouchMenuEntry>,
+    touch_editor: TouchLayoutEditor,
 
     selected_player: Player,
     selected_controller: ControllerType,
@@ -182,6 +215,8 @@ impl ControlsMenu {
             rebind,
             confirm_rebind,
             confirm_reset,
+            touch: Menu::new(0, 0, 220, 0),
+            touch_editor: TouchLayoutEditor::new(),
 
             selected_player: Player::Player1,
             selected_controller: ControllerType::Keyboard,
@@ -221,14 +256,52 @@ impl ControlsMenu {
 
         if state.settings.touch_controls {
             self.main.push_entry(
-                MainMenuEntry::DisplayTouchControls,
-                MenuEntry::Toggle(
-                    state.loc.t("menus.options_menu.controls_menu.display_touch_controls").to_owned(),
-                    state.settings.display_touch_controls,
-                ),
+                MainMenuEntry::TouchControls,
+                MenuEntry::Active(state.loc.t("menus.controls_menu.touch_menu.entry").to_owned()),
             );
         }
         self.main.push_entry(MainMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
+
+        let layout = &state.settings.touch_layout;
+        self.touch.push_entry(
+            TouchMenuEntry::Show,
+            MenuEntry::Toggle(
+                state.loc.t("menus.options_menu.controls_menu.display_touch_controls").to_owned(),
+                state.settings.display_touch_controls,
+            ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Opacity,
+            MenuEntry::Options(
+                state.loc.t("menus.controls_menu.touch_menu.opacity.entry").to_owned(),
+                TouchLayout::closest_index(&TouchLayout::OPACITIES, layout.opacity),
+                // The game's font has no "%", so the levels are named.
+                ["low", "medium", "high", "full"]
+                    .iter()
+                    .map(|level| state.loc.t(&format!("menus.controls_menu.touch_menu.opacity.{}", level)).to_owned())
+                    .collect(),
+            ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Size,
+            MenuEntry::Options(
+                state.loc.t("menus.controls_menu.touch_menu.size.entry").to_owned(),
+                TouchLayout::closest_index(&TouchLayout::SIZES, layout.size),
+                ["small", "normal", "large", "huge"]
+                    .iter()
+                    .map(|size| state.loc.t(&format!("menus.controls_menu.touch_menu.size.{}", size)).to_owned())
+                    .collect(),
+            ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Move,
+            MenuEntry::Active(state.loc.t("menus.controls_menu.touch_menu.move").to_owned()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Reset,
+            MenuEntry::Active(state.loc.t("menus.controls_menu.touch_menu.reset").to_owned()),
+        );
+        self.touch.push_entry(TouchMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
 
         self.confirm_reset.push_entry(
             ConfirmResetMenuEntry::Title,
@@ -282,6 +355,11 @@ impl ControlsMenu {
         self.confirm_reset.update_height(state);
         self.confirm_reset.x = ((state.canvas_size.0 - self.confirm_reset.width as f32) / 2.0).floor() as isize;
         self.confirm_reset.y = ((state.canvas_size.1 - self.confirm_reset.height as f32) / 2.0).floor() as isize;
+
+        self.touch.update_width(state);
+        self.touch.update_height(state);
+        self.touch.x = ((state.canvas_size.0 - self.touch.width as f32) / 2.0).floor() as isize;
+        self.touch.y = ((state.canvas_size.1 - self.touch.height as f32) / 2.0).floor() as isize;
     }
 
     fn init_key_map(&self, settings_key_map: &PlayerKeyMap) -> Vec<(ControlEntry, ScanCode)> {
@@ -980,13 +1058,8 @@ impl ControlsMenu {
                         state.settings.save(ctx)?;
                     }
                 }
-                MenuSelectionResult::Selected(MainMenuEntry::DisplayTouchControls, toggle) => {
-                    if let MenuEntry::Toggle(_, value) = toggle {
-                        state.settings.display_touch_controls = !state.settings.display_touch_controls;
-                        let _ = state.settings.save(ctx);
-
-                        *value = state.settings.display_touch_controls;
-                    }
+                MenuSelectionResult::Selected(MainMenuEntry::TouchControls, _) => {
+                    self.current = CurrentMenu::TouchMenu;
                 }
                 MenuSelectionResult::Selected(MainMenuEntry::Back, _) | MenuSelectionResult::Canceled => exit_action(),
                 _ => {}
@@ -1181,6 +1254,51 @@ impl ControlsMenu {
                 }
                 _ => {}
             },
+            CurrentMenu::TouchMenu => match self.touch.tick(controller, state) {
+                MenuSelectionResult::Selected(TouchMenuEntry::Show, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        state.settings.display_touch_controls = !state.settings.display_touch_controls;
+                        let _ = state.settings.save(ctx);
+
+                        *value = state.settings.display_touch_controls;
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Opacity, toggle)
+                | MenuSelectionResult::Right(TouchMenuEntry::Opacity, toggle, _) => {
+                    state.settings.touch_layout.opacity = TouchLayout::OPACITIES[step_option(toggle, 1)];
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Left(TouchMenuEntry::Opacity, toggle, _) => {
+                    state.settings.touch_layout.opacity = TouchLayout::OPACITIES[step_option(toggle, -1)];
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Size, toggle)
+                | MenuSelectionResult::Right(TouchMenuEntry::Size, toggle, _) => {
+                    state.settings.touch_layout.size = TouchLayout::SIZES[step_option(toggle, 1)];
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Left(TouchMenuEntry::Size, toggle, _) => {
+                    state.settings.touch_layout.size = TouchLayout::SIZES[step_option(toggle, -1)];
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Move, _) => {
+                    self.touch_editor = TouchLayoutEditor::new();
+                    self.current = CurrentMenu::TouchLayoutEditor;
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Reset, _) => {
+                    state.settings.touch_layout.reset_positions();
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Back, _) | MenuSelectionResult::Canceled => {
+                    self.current = CurrentMenu::MainMenu;
+                }
+                _ => {}
+            },
+            CurrentMenu::TouchLayoutEditor => {
+                if self.touch_editor.tick(controller, state, ctx)? {
+                    self.current = CurrentMenu::TouchMenu;
+                }
+            }
         }
 
         if self.input_busy {
@@ -1213,6 +1331,23 @@ impl ControlsMenu {
             CurrentMenu::RebindMenu => self.rebind.draw(state, ctx)?,
             CurrentMenu::ConfirmRebindMenu => self.confirm_rebind.draw(state, ctx)?,
             CurrentMenu::ConfirmResetMenu => self.confirm_reset.draw(state, ctx)?,
+            CurrentMenu::TouchMenu => {
+                // Show the buttons behind the menu, so opacity and size changes are visible right away.
+                if state.settings.display_touch_controls {
+                    let geometry =
+                        TouchGeometry::new(ctx, state.canvas_size, state.scale, &state.settings.touch_layout);
+                    state.touch_controls.draw_buttons(
+                        &geometry,
+                        &state.settings.touch_layout,
+                        None,
+                        &state.constants,
+                        &mut state.texture_set,
+                        ctx,
+                    )?;
+                }
+                self.touch.draw(state, ctx)?
+            }
+            CurrentMenu::TouchLayoutEditor => self.touch_editor.draw(state, ctx)?,
         }
 
         Ok(())

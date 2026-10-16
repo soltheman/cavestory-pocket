@@ -200,6 +200,7 @@ impl Game {
                         scene.draw_tick(state_ref)?;
                         for _ in 0..loops {
                             scene.tick(state_ref, ctx)?;
+                            state_ref.touch_controls.end_tick();
                         }
                     }
                     self.fps.tick_count = self.fps.tick_count.saturating_add(loops);
@@ -209,6 +210,7 @@ impl Game {
                 if let Some(scene) = self.scene.get_mut() {
                     let state_ref = self.state.get_mut();
                     scene.tick(state_ref, ctx)?;
+                    state_ref.touch_controls.end_tick();
                 }
             }
         }
@@ -305,6 +307,7 @@ impl Game {
                 state_ref.touch_controls.draw(
                     state_ref.canvas_size,
                     state_ref.scale,
+                    &state_ref.settings.touch_layout,
                     &state_ref.constants,
                     &mut state_ref.texture_set,
                     ctx,

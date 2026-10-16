@@ -47,7 +47,7 @@ use crate::game::stage::{BackgroundType, Stage, StageTexturePaths};
 use crate::game::weapon::bullet::BulletManager;
 use crate::game::weapon::WeaponType;
 use crate::graphics::font::{Font, Symbols};
-use crate::input::touch_controls::TouchControlType;
+use crate::input::touch_controls::{TouchButton, TouchControlType, TouchGeometry};
 use crate::menu::pause_menu::PauseMenu;
 use crate::scene::title_scene::TitleScene;
 use crate::scene::Scene;
@@ -1494,9 +1494,19 @@ impl Scene for GameScene {
 
             // let width = state.font.text_width_with_rects(text.chars(), &rect_map, &state.constants);
             let width = state.font.builder().with_symbols(Some(symbols)).compute_width(&text);
-            let pos_x = state.canvas_size.0 - width - 20.0;
-            let pos_y = 0.0;
             let line_height = state.font.line_height();
+            let (pos_x, pos_y) = if state.settings.touch_controls {
+                // Beside the on-screen skip button instead of underneath it.
+                let layout = &state.settings.touch_layout;
+                let button = TouchGeometry::new(ctx, state.canvas_size, state.scale, layout)
+                    .rect(layout, TouchButton::Inventory);
+                (
+                    (button.left as f32 - width - 24.0).max(0.0),
+                    (button.top + button.bottom) as f32 / 2.0 - (10.0 + line_height) / 2.0,
+                )
+            } else {
+                (state.canvas_size.0 - width - 20.0, 0.0)
+            };
             let w = (self.skip_counter as f32 / CUTSCENE_SKIP_WAIT as f32) * (width + 20.0) / 2.0;
             let mut rect = Rect::new_size(
                 (pos_x * state.scale) as isize,
@@ -1510,7 +1520,7 @@ impl Scene for GameScene {
             rect.right = rect.left + (w * state.scale) as isize;
             draw_rect(ctx, rect, Color::from_rgb(128, 128, 160))?;
 
-            rect.left = ((state.canvas_size.0 - w) * state.scale) as isize;
+            rect.left = ((pos_x + 20.0 + width - w) * state.scale) as isize;
             rect.right = rect.left + (w * state.scale).ceil() as isize;
             draw_rect(ctx, rect, Color::from_rgb(128, 128, 160))?;
 

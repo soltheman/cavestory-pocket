@@ -344,7 +344,12 @@ impl SharedGameState {
     pub fn new(ctx: &mut Context) -> GameResult<SharedGameState> {
         let mut constants = EngineConstants::defaults();
         let mut sound_manager = SoundManager::new(ctx)?;
-        let settings = Settings::load(ctx)?;
+        let mut settings = Settings::load(ctx)?;
+        // CAVESTORY_TOUCH=1 tries the phone controls on a computer (the mouse acts as a finger).
+        if std::env::var("CAVESTORY_TOUCH").as_deref() == Ok("1") {
+            settings.touch_controls = true;
+        }
+        crate::menu::set_touch_rows(settings.touch_controls);
         let mod_requirements = ModRequirements::load(ctx)?;
 
         let vanilla_ext_exe = match option_env!("VANILLA_EXT_EXE") {

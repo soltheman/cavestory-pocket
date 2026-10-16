@@ -115,7 +115,7 @@ impl PauseMenu {
 
         state.menu_character = MenuCharacter::Quote;
 
-        self.update_coop_menu_items(state);
+        self.update_coop_menu_items(state, ctx);
 
         Ok(())
     }
@@ -132,21 +132,29 @@ impl PauseMenu {
         self.confirm_menu.y = ((state.canvas_size.1 - self.confirm_menu.height as f32) / 2.0).floor() as isize;
     }
 
-    fn update_coop_menu_items(&mut self, state: &SharedGameState) {
+    fn update_coop_menu_items(&mut self, state: &SharedGameState, ctx: &Context) {
         if !state.constants.supports_two_player {
             return;
         }
+
+        // On a touch screen with no controllers, a second player has nothing to play with.
+        let second_player_possible = !state.settings.touch_controls || !ctx.gamepad_context.get_gamepads().is_empty();
 
         match state.player_count {
             PlayerCount::One => {
                 self.pause_menu.set_entry(
                     PauseMenuEntry::AddPlayer2,
-                    MenuEntry::Active(state.loc.t("menus.pause_menu.add_player2").to_owned()),
+                    if second_player_possible {
+                        MenuEntry::Active(state.loc.t("menus.pause_menu.add_player2").to_owned())
+                    } else {
+                        MenuEntry::Hidden
+                    },
                 );
                 self.pause_menu.set_entry(PauseMenuEntry::DropPlayer2, MenuEntry::Hidden);
 
                 if self.pause_menu.selected == PauseMenuEntry::DropPlayer2 {
-                    self.pause_menu.selected = PauseMenuEntry::AddPlayer2;
+                    self.pause_menu.selected =
+                        if second_player_possible { PauseMenuEntry::AddPlayer2 } else { PauseMenuEntry::Resume };
                 }
             }
             PlayerCount::Two => {
@@ -186,7 +194,7 @@ impl PauseMenu {
         }
 
         if self.should_update_coop_menu {
-            self.update_coop_menu_items(state);
+            self.update_coop_menu_items(state, ctx);
             self.should_update_coop_menu = false;
         }
 
