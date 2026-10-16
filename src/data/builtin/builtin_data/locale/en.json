@@ -201,7 +201,47 @@
           "jump": "Jump",
           "shoot": "Shoot",
           "inventory": "Items",
-          "pause": "Pause"
+          "pause": "Pause",
+          "prev_weapon": "Prev gun",
+          "next_weapon": "Next gun"
+        },
+        "icons": {
+          "entry": "Icons:",
+          "classic": "Classic",
+          "bold": "Bold",
+          "text": "Text"
+        },
+        "color": {
+          "entry": "Color:",
+          "ice": "Ice",
+          "white": "White",
+          "red": "Red",
+          "gold": "Gold",
+          "green": "Green",
+          "purple": "Purple",
+          "pink": "Pink"
+        },
+        "shape": {
+          "entry": "Shape:",
+          "round": "Round",
+          "square": "Square",
+          "none": "None"
+        },
+        "dpad": {
+          "entry": "D-pad:",
+          "arrows": "Arrows",
+          "stick": "Stick"
+        },
+        "weapon_buttons": "Weapon buttons:",
+        "text": {
+          "dpad": "MOVE",
+          "jump": "JUMP",
+          "shoot": "FIRE",
+          "inventory": "ITEMS",
+          "pause": "PAUSE",
+          "prev_weapon": "<GUN",
+          "next_weapon": "GUN>",
+          "skip": "SKIP"
         }
       },
       "select_player": {

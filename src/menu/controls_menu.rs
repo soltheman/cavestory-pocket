@@ -9,7 +9,9 @@ use crate::game::settings::{
 };
 use crate::game::shared_game_state::SharedGameState;
 use crate::input::combined_menu_controller::CombinedMenuController;
-use crate::input::touch_controls::{TouchGeometry, TouchLayout};
+use crate::input::touch_controls::{
+    TouchArt, TouchColor, TouchDpadStyle, TouchGeometry, TouchIconStyle, TouchLayout, TouchShape,
+};
 
 use super::touch_layout_editor::TouchLayoutEditor;
 use super::{ControlMenuData, Menu, MenuEntry, MenuSelectionResult};
@@ -62,11 +64,27 @@ fn step_option(entry: &mut MenuEntry, delta: isize) -> usize {
     }
 }
 
+/// Applies the `index`-th value of a look option (icons, colour, shape, d-pad) to the layout.
+fn set_touch_look(layout: &mut TouchLayout, entry: TouchMenuEntry, index: usize) {
+    match entry {
+        TouchMenuEntry::Icons => layout.icon_style = TouchIconStyle::ALL[index],
+        TouchMenuEntry::Color => layout.color = TouchColor::ALL[index],
+        TouchMenuEntry::Shape => layout.shape = TouchShape::ALL[index],
+        TouchMenuEntry::Dpad => layout.dpad_style = TouchDpadStyle::ALL[index],
+        _ => {}
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum TouchMenuEntry {
     Show,
     Opacity,
     Size,
+    Icons,
+    Color,
+    Shape,
+    Dpad,
+    WeaponButtons,
     Move,
     Reset,
     Back,
@@ -291,6 +309,40 @@ impl ControlsMenu {
                     .iter()
                     .map(|size| state.loc.t(&format!("menus.controls_menu.touch_menu.size.{}", size)).to_owned())
                     .collect(),
+            ),
+        );
+
+        // Each look option: its menu entry, the current value's index, and the names of all values.
+        let option = |group: &str, index: usize, keys: Vec<&str>| {
+            MenuEntry::Options(
+                state.loc.t(&format!("menus.controls_menu.touch_menu.{}.entry", group)).to_owned(),
+                index,
+                keys.iter()
+                    .map(|key| state.loc.t(&format!("menus.controls_menu.touch_menu.{}.{}", group, key)).to_owned())
+                    .collect(),
+            )
+        };
+        self.touch.push_entry(
+            TouchMenuEntry::Icons,
+            option("icons", layout.icon_style.index(), TouchIconStyle::ALL.iter().map(|v| v.key()).collect()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Color,
+            option("color", layout.color.index(), TouchColor::ALL.iter().map(|v| v.key()).collect()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Shape,
+            option("shape", layout.shape.index(), TouchShape::ALL.iter().map(|v| v.key()).collect()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Dpad,
+            option("dpad", layout.dpad_style.index(), TouchDpadStyle::ALL.iter().map(|v| v.key()).collect()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::WeaponButtons,
+            MenuEntry::Toggle(
+                state.loc.t("menus.controls_menu.touch_menu.weapon_buttons").to_owned(),
+                layout.weapon_buttons,
             ),
         );
         self.touch.push_entry(
@@ -1281,6 +1333,33 @@ impl ControlsMenu {
                     state.settings.touch_layout.size = TouchLayout::SIZES[step_option(toggle, -1)];
                     let _ = state.settings.save(ctx);
                 }
+                MenuSelectionResult::Selected(
+                    entry @ (TouchMenuEntry::Icons | TouchMenuEntry::Color | TouchMenuEntry::Shape | TouchMenuEntry::Dpad),
+                    toggle,
+                )
+                | MenuSelectionResult::Right(
+                    entry @ (TouchMenuEntry::Icons | TouchMenuEntry::Color | TouchMenuEntry::Shape | TouchMenuEntry::Dpad),
+                    toggle,
+                    _,
+                ) => {
+                    set_touch_look(&mut state.settings.touch_layout, entry, step_option(toggle, 1));
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Left(
+                    entry @ (TouchMenuEntry::Icons | TouchMenuEntry::Color | TouchMenuEntry::Shape | TouchMenuEntry::Dpad),
+                    toggle,
+                    _,
+                ) => {
+                    set_touch_look(&mut state.settings.touch_layout, entry, step_option(toggle, -1));
+                    let _ = state.settings.save(ctx);
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::WeaponButtons, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        state.settings.touch_layout.weapon_buttons = !state.settings.touch_layout.weapon_buttons;
+                        *value = state.settings.touch_layout.weapon_buttons;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
                 MenuSelectionResult::Selected(TouchMenuEntry::Move, _) => {
                     self.touch_editor = TouchLayoutEditor::new();
                     self.current = CurrentMenu::TouchLayoutEditor;
@@ -1340,8 +1419,12 @@ impl ControlsMenu {
                         &geometry,
                         &state.settings.touch_layout,
                         None,
-                        &state.constants,
-                        &mut state.texture_set,
+                        &mut TouchArt {
+                            constants: &state.constants,
+                            texture_set: &mut state.texture_set,
+                            font: &state.font,
+                            loc: &state.loc,
+                        },
                         ctx,
                     )?;
                 }

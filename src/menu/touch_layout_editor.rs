@@ -5,7 +5,7 @@ use crate::framework::graphics;
 use crate::game::shared_game_state::SharedGameState;
 use crate::graphics::font::Font;
 use crate::input::combined_menu_controller::CombinedMenuController;
-use crate::input::touch_controls::{TouchButton, TouchGeometry};
+use crate::input::touch_controls::{TouchArt, TouchButton, TouchGeometry};
 
 const TOP_BUTTON_WIDTH: isize = 64;
 const TOP_BUTTON_HEIGHT: isize = 20;
@@ -40,6 +40,8 @@ impl TouchLayoutEditor {
             TouchButton::Shoot => "menus.controls_menu.touch_menu.labels.shoot",
             TouchButton::Inventory => "menus.controls_menu.touch_menu.labels.inventory",
             TouchButton::Pause => "menus.controls_menu.touch_menu.labels.pause",
+            TouchButton::PrevWeapon => "menus.controls_menu.touch_menu.labels.prev_weapon",
+            TouchButton::NextWeapon => "menus.controls_menu.touch_menu.labels.next_weapon",
         })
     }
 
@@ -82,9 +84,10 @@ impl TouchLayoutEditor {
             }
             None => {
                 let layout = &state.settings.touch_layout;
+                let buttons = layout.visible_buttons();
                 // Small buttons first, so one dropped on the d-pad can still be picked up.
                 let grabbed = state.touch_controls.points.iter().find_map(|point| {
-                    TouchButton::ALL.iter().rev().find(|&&button| point.is_in(geometry.rect(layout, button))).map(
+                    buttons.iter().rev().find(|&&button| point.is_in(geometry.rect(layout, button))).map(
                         |&button| {
                             let (x, y) = geometry.center(layout, button);
                             (point.touch_id, button, (x - point.position.0 as f32, y - point.position.1 as f32))
@@ -117,24 +120,32 @@ impl TouchLayoutEditor {
             &geometry,
             &state.settings.touch_layout,
             highlight,
-            &state.constants,
-            &mut state.texture_set,
+            &mut TouchArt {
+                constants: &state.constants,
+                texture_set: &mut state.texture_set,
+                font: &state.font,
+                loc: &state.loc,
+            },
             ctx,
         )?;
 
-        // Name each control: below it, else above, else beside it, wherever no other button is.
-        let rects: Vec<Rect<isize>> =
-            TouchButton::ALL.iter().map(|&button| geometry.rect(&state.settings.touch_layout, button)).collect();
+        // Name each control: below it, else above, else beside it, wherever no button or other label is.
+        let buttons = state.settings.touch_layout.visible_buttons();
+        let mut rects: Vec<Rect<isize>> =
+            buttons.iter().map(|&button| geometry.rect(&state.settings.touch_layout, button)).collect();
         let line_height = state.font.line_height();
 
-        for (button, rect) in TouchButton::ALL.iter().zip(&rects) {
+        for (index, button) in buttons.iter().enumerate() {
+            let rect = rects[index];
             let label = Self::label(state, *button).to_owned();
             let width = state.font.builder().compute_width(&label);
             let (center_x, center_y) = ((rect.left + rect.right) as f32 / 2.0, (rect.top + rect.bottom) as f32 / 2.0);
 
+            // Labels near a side edge slide inward rather than off screen.
+            let max_x = (state.canvas_size.0 - width).max(0.0);
             let candidates = [
-                (center_x - width / 2.0, rect.bottom as f32 + 2.0),
-                (center_x - width / 2.0, rect.top as f32 - line_height - 2.0),
+                ((center_x - width / 2.0).clamp(0.0, max_x), rect.bottom as f32 + 2.0),
+                ((center_x - width / 2.0).clamp(0.0, max_x), rect.top as f32 - line_height - 2.0),
                 (rect.left as f32 - width - 4.0, center_y - line_height / 2.0),
                 (rect.right as f32 + 4.0, center_y - line_height / 2.0),
             ];
@@ -148,6 +159,7 @@ impl TouchLayoutEditor {
                     })
             };
             let (x, y) = candidates.iter().copied().find(fits).unwrap_or(candidates[0]);
+            rects.push(Rect::new_size(x as isize, y as isize, width as isize, line_height as isize));
 
             state.font.builder().position(x, y).shadow(true).draw(&label, ctx, &state.constants, &mut state.texture_set)?;
         }

@@ -21,6 +21,7 @@ use crate::game::filesystem_container::FilesystemContainer;
 use crate::game::settings::{Settings, VSyncMode};
 use crate::game::shared_game_state::{Fps, SharedGameState, TimingMode, WindowMode};
 use crate::graphics::texture_set::{G_MAG, I_MAG};
+use crate::input::touch_controls::TouchArt;
 use crate::scene::loading_scene::LoadingScene;
 use crate::scene::Scene;
 
@@ -308,8 +309,12 @@ impl Game {
                     state_ref.canvas_size,
                     state_ref.scale,
                     &state_ref.settings.touch_layout,
-                    &state_ref.constants,
-                    &mut state_ref.texture_set,
+                    &mut TouchArt {
+                        constants: &state_ref.constants,
+                        texture_set: &mut state_ref.texture_set,
+                        font: &state_ref.font,
+                        loc: &state_ref.loc,
+                    },
                     ctx,
                 )?;
             }

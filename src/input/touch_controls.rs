@@ -3,7 +3,10 @@ use crate::engine_constants::EngineConstants;
 use crate::framework::context::Context;
 use crate::framework::error::GameResult;
 use crate::framework::graphics::screen_insets_scaled;
+use crate::graphics::bmfont::BMFont;
+use crate::graphics::font::Font;
 use crate::graphics::texture_set::TextureSet;
+use crate::i18n::Locale;
 
 /// Touches that travel less than this many canvas pixels count as taps.
 pub const TAP_SLOP: f64 = 8.0;
@@ -11,10 +14,12 @@ pub const TAP_SLOP: f64 = 8.0;
 const MARGIN: f32 = 4.0;
 /// Side of a button, and of one d-pad cell, at size 1.0, in canvas pixels.
 const CELL: f32 = 40.0;
-/// Side of one icon in `builtin/touch`.
+/// Side of one icon in `builtin/touch_icons`.
 const ICON: f32 = 32.0;
-/// Side of the round backing in `builtin/touch_plate`.
+/// Side of one backing in `builtin/touch_plate`.
 const PLATE: f32 = 48.0;
+/// Below the weapon and health HUD, where the weapon buttons start by default.
+const HUD_HEIGHT: f32 = 52.0;
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum TouchControlType {
@@ -31,20 +36,129 @@ pub enum TouchButton {
     Shoot,
     Inventory,
     Pause,
+    PrevWeapon,
+    NextWeapon,
 }
 
 impl TouchButton {
-    pub const ALL: [TouchButton; 5] =
-        [TouchButton::DPad, TouchButton::Jump, TouchButton::Shoot, TouchButton::Inventory, TouchButton::Pause];
+    pub const ALL: [TouchButton; 7] = [
+        TouchButton::DPad,
+        TouchButton::Jump,
+        TouchButton::Shoot,
+        TouchButton::Inventory,
+        TouchButton::Pause,
+        TouchButton::PrevWeapon,
+        TouchButton::NextWeapon,
+    ];
 
-    /// Position of the button's icon in `builtin/touch`, in icon cells.
-    fn icon(self) -> (u16, u16) {
+    /// The button's icon: its cell in the 4x4 icon layout, or one of the weapon icons in row 8.
+    fn icon(self) -> Icon {
         match self {
-            TouchButton::DPad => (1, 1),
-            TouchButton::Jump => (3, 1),
-            TouchButton::Shoot => (3, 0),
-            TouchButton::Inventory => (0, 3),
-            TouchButton::Pause => (1, 3),
+            TouchButton::DPad => Icon::Cell(1, 1),
+            TouchButton::Jump => Icon::Cell(3, 1),
+            TouchButton::Shoot => Icon::Cell(3, 0),
+            TouchButton::Inventory => Icon::Cell(0, 3),
+            TouchButton::Pause => Icon::Cell(1, 3),
+            TouchButton::PrevWeapon => Icon::Weapon(false),
+            TouchButton::NextWeapon => Icon::Weapon(true),
+        }
+    }
+
+    /// Short label for the Text icon style.
+    fn text_key(self) -> &'static str {
+        match self {
+            TouchButton::DPad => "menus.controls_menu.touch_menu.text.dpad",
+            TouchButton::Jump => "menus.controls_menu.touch_menu.text.jump",
+            TouchButton::Shoot => "menus.controls_menu.touch_menu.text.shoot",
+            TouchButton::Inventory => "menus.controls_menu.touch_menu.text.inventory",
+            TouchButton::Pause => "menus.controls_menu.touch_menu.text.pause",
+            TouchButton::PrevWeapon => "menus.controls_menu.touch_menu.text.prev_weapon",
+            TouchButton::NextWeapon => "menus.controls_menu.touch_menu.text.next_weapon",
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+enum Icon {
+    Cell(u16, u16),
+    Weapon(bool),
+}
+
+/// Declares a settings enum with its menu order and the locale key of each value.
+macro_rules! touch_option {
+    ($(#[$doc:meta])* $name:ident { $($variant:ident => $key:literal),+ $(,)? }) => {
+        $(#[$doc])*
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+        pub enum $name {
+            $($variant),+
+        }
+
+        impl $name {
+            pub const ALL: &'static [$name] = &[$($name::$variant),+];
+
+            /// Last part of the value's locale key.
+            pub fn key(self) -> &'static str {
+                match self {
+                    $($name::$variant => $key),+
+                }
+            }
+
+            pub fn index(self) -> usize {
+                Self::ALL.iter().position(|v| *v == self).unwrap_or(0)
+            }
+        }
+    };
+}
+
+touch_option!(
+    /// Which icons the buttons show.
+    TouchIconStyle {
+        Classic => "classic",
+        Bold => "bold",
+        Text => "text",
+    }
+);
+
+touch_option!(
+    /// Colour of the icons and rims; the backing stays dark.
+    TouchColor {
+        Ice => "ice",
+        White => "white",
+        Red => "red",
+        Gold => "gold",
+        Green => "green",
+        Purple => "purple",
+        Pink => "pink",
+    }
+);
+
+touch_option!(
+    /// Backing behind each button.
+    TouchShape {
+        Round => "round",
+        Square => "square",
+        None => "none",
+    }
+);
+
+touch_option!(
+    /// How the d-pad looks; it steers the same either way.
+    TouchDpadStyle {
+        Arrows => "arrows",
+        Stick => "stick",
+    }
+);
+
+impl TouchColor {
+    pub fn rgb(self) -> (u8, u8, u8) {
+        match self {
+            TouchColor::Ice => (170, 195, 255),
+            TouchColor::White => (255, 255, 255),
+            TouchColor::Red => (255, 96, 86),
+            TouchColor::Gold => (255, 205, 70),
+            TouchColor::Green => (120, 235, 120),
+            TouchColor::Purple => (195, 140, 255),
+            TouchColor::Pink => (255, 145, 205),
         }
     }
 }
@@ -57,17 +171,40 @@ pub struct TouchLayout {
     pub opacity: f32,
     /// Multiplier on the default button size.
     pub size: f32,
+    pub icon_style: TouchIconStyle,
+    pub color: TouchColor,
+    pub shape: TouchShape,
+    pub dpad_style: TouchDpadStyle,
+    /// Whether the previous/next weapon buttons are shown.
+    pub weapon_buttons: bool,
     /// Button centres as fractions of the safe area; `None` keeps the default spot.
     pub dpad: Option<(f32, f32)>,
     pub jump: Option<(f32, f32)>,
     pub shoot: Option<(f32, f32)>,
     pub inventory: Option<(f32, f32)>,
     pub pause: Option<(f32, f32)>,
+    pub prev_weapon: Option<(f32, f32)>,
+    pub next_weapon: Option<(f32, f32)>,
 }
 
 impl Default for TouchLayout {
     fn default() -> Self {
-        TouchLayout { opacity: 0.75, size: 1.0, dpad: None, jump: None, shoot: None, inventory: None, pause: None }
+        TouchLayout {
+            opacity: 0.75,
+            size: 1.0,
+            icon_style: TouchIconStyle::Classic,
+            color: TouchColor::Ice,
+            shape: TouchShape::Round,
+            dpad_style: TouchDpadStyle::Arrows,
+            weapon_buttons: true,
+            dpad: None,
+            jump: None,
+            shoot: None,
+            inventory: None,
+            pause: None,
+            prev_weapon: None,
+            next_weapon: None,
+        }
     }
 }
 
@@ -82,6 +219,8 @@ impl TouchLayout {
             TouchButton::Shoot => self.shoot,
             TouchButton::Inventory => self.inventory,
             TouchButton::Pause => self.pause,
+            TouchButton::PrevWeapon => self.prev_weapon,
+            TouchButton::NextWeapon => self.next_weapon,
         }
     }
 
@@ -92,6 +231,8 @@ impl TouchLayout {
             TouchButton::Shoot => self.shoot = position,
             TouchButton::Inventory => self.inventory = position,
             TouchButton::Pause => self.pause = position,
+            TouchButton::PrevWeapon => self.prev_weapon = position,
+            TouchButton::NextWeapon => self.next_weapon = position,
         }
     }
 
@@ -99,6 +240,15 @@ impl TouchLayout {
         for button in TouchButton::ALL {
             self.set_position(button, None);
         }
+    }
+
+    /// The buttons on screen: all of them, minus the weapon buttons when they're turned off.
+    pub fn visible_buttons(&self) -> Vec<TouchButton> {
+        TouchButton::ALL
+            .iter()
+            .copied()
+            .filter(|b| self.weapon_buttons || !matches!(b, TouchButton::PrevWeapon | TouchButton::NextWeapon))
+            .collect()
     }
 
     /// Index of the closest entry of `options` to `value`.
@@ -136,6 +286,7 @@ impl TouchGeometry {
     fn extent(&self, button: TouchButton) -> f32 {
         match button {
             TouchButton::DPad => self.cell * 3.0,
+            TouchButton::PrevWeapon | TouchButton::NextWeapon => self.cell * 0.8,
             _ => self.cell,
         }
     }
@@ -143,6 +294,7 @@ impl TouchGeometry {
     fn default_center(&self, button: TouchButton) -> (f32, f32) {
         let (left, top, right, bottom) = self.area;
         let (c, m) = (self.cell, MARGIN);
+        let w = self.extent(TouchButton::PrevWeapon);
 
         match button {
             TouchButton::DPad => (left + m + c * 1.5, bottom - m - c * 1.5),
@@ -151,6 +303,9 @@ impl TouchGeometry {
             TouchButton::Inventory => (right - m - c * 0.5, top + m + c * 0.5),
             // Next to Inventory rather than top-left, where it covered the weapon HUD.
             TouchButton::Pause => (right - m * 2.0 - c * 1.5, top + m + c * 0.5),
+            // Just under the weapon HUD they switch.
+            TouchButton::PrevWeapon => (left + m + w * 0.5, top + HUD_HEIGHT + w * 0.5),
+            TouchButton::NextWeapon => (left + m * 2.0 + w * 1.5, top + HUD_HEIGHT + w * 0.5),
         }
     }
 
@@ -208,6 +363,14 @@ impl TouchGeometry {
         let angle = dy.atan2(dx).to_degrees();
         Some((angle.abs() >= 120.0, (-150.0..=-30.0).contains(&angle), angle.abs() <= 60.0, (30.0..=150.0).contains(&angle)))
     }
+}
+
+/// What drawing the controls needs from the game state.
+pub struct TouchArt<'a> {
+    pub constants: &'a EngineConstants,
+    pub texture_set: &'a mut TextureSet,
+    pub font: &'a BMFont,
+    pub loc: &'a Locale,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -343,8 +506,7 @@ impl TouchControls {
         canvas_size: (f32, f32),
         scale: f32,
         layout: &TouchLayout,
-        constants: &EngineConstants,
-        texture_set: &mut TextureSet,
+        art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
         let geometry = TouchGeometry::new(ctx, canvas_size, scale, layout);
@@ -352,40 +514,121 @@ impl TouchControls {
         match self.control_type {
             TouchControlType::None => Ok(()),
             // Fast-forward sits where Inventory does, and is pressed in the same spot.
-            TouchControlType::Dialog => {
-                self.draw_button(&geometry, layout, TouchButton::Inventory, (2, 3), false, constants, texture_set, ctx)
-            }
-            TouchControlType::Controls => self.draw_buttons(&geometry, layout, None, constants, texture_set, ctx),
+            TouchControlType::Dialog => self.draw_button(
+                &geometry,
+                layout,
+                TouchButton::Inventory,
+                Icon::Cell(2, 3),
+                "menus.controls_menu.touch_menu.text.skip",
+                false,
+                art,
+                ctx,
+            ),
+            TouchControlType::Controls => self.draw_buttons(&geometry, layout, None, art, ctx),
         }
     }
 
-    /// Draws every movable control. `highlight` marks one as held, for the layout editor.
+    /// Draws every visible control. `highlight` marks one as held, for the layout editor.
     pub fn draw_buttons(
         &self,
         geometry: &TouchGeometry,
         layout: &TouchLayout,
         highlight: Option<TouchButton>,
-        constants: &EngineConstants,
-        texture_set: &mut TextureSet,
+        art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
-        self.draw_dpad(geometry, layout, highlight == Some(TouchButton::DPad), constants, texture_set, ctx)?;
-
-        for button in [TouchButton::Jump, TouchButton::Shoot, TouchButton::Inventory, TouchButton::Pause] {
-            let held = highlight == Some(button) || self.find_point_in(geometry.rect(layout, button)).is_some();
-            self.draw_button(geometry, layout, button, button.icon(), held, constants, texture_set, ctx)?;
+        for button in layout.visible_buttons() {
+            if button == TouchButton::DPad {
+                self.draw_dpad(geometry, layout, highlight == Some(button), art, ctx)?;
+            } else {
+                let held = highlight == Some(button) || self.find_point_in(geometry.rect(layout, button)).is_some();
+                self.draw_button(geometry, layout, button, button.icon(), button.text_key(), held, art, ctx)?;
+            }
         }
 
         Ok(())
     }
 
-    fn colors(layout: &TouchLayout, held: bool) -> ((u8, u8, u8, u8), (u8, u8, u8, u8)) {
-        let alpha = (layout.opacity.clamp(0.0, 1.0) * 255.0) as u8;
-        if held {
-            ((255, 220, 120, alpha), (255, 240, 160, alpha))
-        } else {
-            ((255, 255, 255, alpha), (255, 255, 255, alpha))
+    fn alpha(layout: &TouchLayout, fraction: f32) -> u8 {
+        (layout.opacity.clamp(0.0, 1.0) * fraction * 255.0) as u8
+    }
+
+    /// The backing's cell in `builtin/touch_plate`: (x, y) of the rimmed version; the solid one is 48px right.
+    fn plate_origin(shape: TouchShape) -> (u16, u16) {
+        match shape {
+            TouchShape::Square => (0, 48),
+            _ => (0, 0),
         }
+    }
+
+    /// Draws the backing (when asked and the shape isn't None) and, when held, a coloured glow over it.
+    fn draw_plate(
+        layout: &TouchLayout,
+        x: f32,
+        y: f32,
+        side: f32,
+        backing: bool,
+        held: bool,
+        art: &mut TouchArt,
+        ctx: &mut Context,
+    ) -> GameResult {
+        let (r, g, b) = layout.color.rgb();
+        let (px, py) = Self::plate_origin(layout.shape);
+        let batch = art.texture_set.get_or_load_batch(ctx, art.constants, "builtin/touch_plate")?;
+
+        if backing && layout.shape != TouchShape::None {
+            batch.add_rect_scaled_tinted(
+                x,
+                y,
+                (r, g, b, Self::alpha(layout, 1.0)),
+                side / PLATE,
+                side / PLATE,
+                &Rect::new_size(px, py, PLATE as u16, PLATE as u16),
+            );
+        }
+        if held {
+            batch.add_rect_scaled_tinted(
+                x,
+                y,
+                (r, g, b, Self::alpha(layout, 0.45)),
+                side / PLATE,
+                side / PLATE,
+                &Rect::new_size(px + PLATE as u16, py, PLATE as u16, PLATE as u16),
+            );
+        }
+
+        batch.draw(ctx)
+    }
+
+    /// Draws an icon centred in a square of `side`, white while held and in the chosen colour otherwise.
+    fn draw_icon(
+        layout: &TouchLayout,
+        icon: Icon,
+        x: f32,
+        y: f32,
+        side: f32,
+        held: bool,
+        art: &mut TouchArt,
+        ctx: &mut Context,
+    ) -> GameResult {
+        let (r, g, b) = if held { (255, 255, 255) } else { layout.color.rgb() };
+        let bold = layout.icon_style != TouchIconStyle::Classic;
+        let source = match icon {
+            Icon::Cell(cx, cy) => Rect::new_size(cx * 32, cy * 32 + if bold { 128 } else { 0 }, 32, 32),
+            Icon::Weapon(next) => Rect::new_size(if bold { 64 } else { 0 } + if next { 32 } else { 0 }, 256, 32, 32),
+        };
+        let icon_side = side * ICON / CELL;
+
+        let batch = art.texture_set.get_or_load_batch(ctx, art.constants, "builtin/touch_icons")?;
+        batch.add_rect_scaled_tinted(
+            x + (side - icon_side) / 2.0,
+            y + (side - icon_side) / 2.0,
+            (r, g, b, Self::alpha(layout, 1.0)),
+            icon_side / ICON,
+            icon_side / ICON,
+            &source,
+        );
+        batch.draw(ctx)
     }
 
     fn draw_button(
@@ -393,38 +636,32 @@ impl TouchControls {
         geometry: &TouchGeometry,
         layout: &TouchLayout,
         button: TouchButton,
-        icon: (u16, u16),
+        icon: Icon,
+        text_key: &str,
         held: bool,
-        constants: &EngineConstants,
-        texture_set: &mut TextureSet,
+        art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
-        let (plate_color, icon_color) = Self::colors(layout, held);
         let rect = geometry.rect(layout, button);
-        let side = rect.width() as f32;
-        let icon_side = side * ICON / CELL;
+        let (x, y, side) = (rect.left as f32, rect.top as f32, rect.width() as f32);
 
-        let plates = texture_set.get_or_load_batch(ctx, constants, "builtin/touch_plate")?;
-        plates.add_rect_scaled_tinted(
-            rect.left as f32,
-            rect.top as f32,
-            plate_color,
-            side / PLATE,
-            side / PLATE,
-            &Rect::new_size(0, 0, PLATE as u16, PLATE as u16),
-        );
-        plates.draw(ctx)?;
+        Self::draw_plate(layout, x, y, side, true, held, art, ctx)?;
 
-        let icons = texture_set.get_or_load_batch(ctx, constants, "builtin/touch")?;
-        icons.add_rect_scaled_tinted(
-            rect.left as f32 + (side - icon_side) / 2.0,
-            rect.top as f32 + (side - icon_side) / 2.0,
-            icon_color,
-            icon_side / ICON,
-            icon_side / ICON,
-            &Rect::new_size(icon.0 * 32, icon.1 * 32, 32, 32),
-        );
-        icons.draw(ctx)
+        if layout.icon_style == TouchIconStyle::Text {
+            let (r, g, b) = if held { (255, 255, 255) } else { layout.color.rgb() };
+            let text = art.loc.t(text_key);
+            let width = art.font.builder().compute_width(text);
+            let line_height = art.font.line_height();
+
+            art.font
+                .builder()
+                .position(x + (side - width) / 2.0, y + (side - line_height) / 2.0)
+                .shadow(true)
+                .color((r, g, b, Self::alpha(layout, 1.0)))
+                .draw(text, ctx, art.constants, art.texture_set)
+        } else {
+            Self::draw_icon(layout, icon, x, y, side, held, art, ctx)
+        }
     }
 
     fn draw_dpad(
@@ -432,79 +669,83 @@ impl TouchControls {
         geometry: &TouchGeometry,
         layout: &TouchLayout,
         highlight: bool,
-        constants: &EngineConstants,
-        texture_set: &mut TextureSet,
+        art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
-        let (plate_color, _) = Self::colors(layout, highlight);
         let rect = geometry.rect(layout, TouchButton::DPad);
-        let side = rect.width() as f32;
+        let (x, y, side) = (rect.left as f32, rect.top as f32, rect.width() as f32);
         let cell = side / 3.0;
-        let icon_side = cell * ICON / CELL;
 
-        let (mut left, mut up, mut right, mut down) = (false, false, false, false);
-        for point in &self.points {
-            if let Some((l, u, r, d)) = geometry.dpad_directions(layout, point) {
-                left |= l;
-                up |= u;
-                right |= r;
-                down |= d;
+        Self::draw_plate(layout, x, y, side, true, highlight, art, ctx)?;
+
+        // The touch steering the pad, if any.
+        let steering = self.points.iter().find_map(|point| {
+            geometry.dpad_directions(layout, point).filter(|_| point.first_position_in(rect)).map(|dirs| (point, dirs))
+        });
+
+        if layout.dpad_style == TouchDpadStyle::Stick {
+            // A knob that follows the thumb, kept inside the pad.
+            let knob = side * 0.42;
+            let (cx, cy) = geometry.center(layout, TouchButton::DPad);
+            let (mut dx, mut dy) = steering
+                .map(|(p, _)| (p.position.0 as f32 - cx, p.position.1 as f32 - cy))
+                .unwrap_or((0.0, 0.0));
+            let reach = (side - knob) / 2.0;
+            let distance = (dx * dx + dy * dy).sqrt();
+            if distance > reach {
+                dx *= reach / distance;
+                dy *= reach / distance;
             }
+
+            let (kx, ky) = (cx + dx - knob / 2.0, cy + dy - knob / 2.0);
+            let shape = TouchLayout { shape: TouchShape::Round, ..layout.clone() };
+            Self::draw_plate(&shape, kx, ky, knob, true, true, art, ctx)?;
+            if self.interact_icon {
+                Self::draw_icon(layout, Icon::Cell(3, 2), kx, ky, knob, false, art, ctx)?;
+            }
+            return Ok(());
         }
 
+        let (left, up, right, down) = steering.map(|(_, dirs)| dirs).unwrap_or((false, false, false, false));
         let held_cell = |x: u16, y: u16| {
             let required = (x != 0 || left) && (x != 2 || right) && (y != 0 || up) && (y != 2 || down);
             let exact = (x != 1 || !(left || right)) && (y != 1 || !(up || down));
             required && exact && (left || up || right || down)
         };
 
-        let plates = texture_set.get_or_load_batch(ctx, constants, "builtin/touch_plate")?;
-        plates.add_rect_scaled_tinted(
-            rect.left as f32,
-            rect.top as f32,
-            plate_color,
-            side / PLATE,
-            side / PLATE,
-            &Rect::new_size(0, 0, PLATE as u16, PLATE as u16),
-        );
-        // A small lit disc under the held direction.
-        let (held_plate, _) = Self::colors(layout, true);
-        for x in 0..3u16 {
-            for y in 0..3u16 {
-                if held_cell(x, y) {
-                    plates.add_rect_scaled_tinted(
-                        rect.left as f32 + cell * x as f32,
-                        rect.top as f32 + cell * y as f32,
-                        held_plate,
-                        cell / PLATE,
-                        cell / PLATE,
-                        &Rect::new_size(0, 0, PLATE as u16, PLATE as u16),
-                    );
-                }
-            }
-        }
-        plates.draw(ctx)?;
+        // Text labels can't point, so that style uses the bold arrows on the pad.
+        let arrows = TouchLayout {
+            icon_style: if layout.icon_style == TouchIconStyle::Classic {
+                TouchIconStyle::Classic
+            } else {
+                TouchIconStyle::Bold
+            },
+            ..layout.clone()
+        };
 
-        let icons = texture_set.get_or_load_batch(ctx, constants, "builtin/touch")?;
-        for x in 0..3u16 {
-            for y in 0..3u16 {
-                if x == 1 && y == 1 {
+        for cx in 0..3u16 {
+            for cy in 0..3u16 {
+                if cx == 1 && cy == 1 {
                     continue;
                 }
 
-                let icon_x = if self.interact_icon && x == 1 && y == 2 { 3 } else { x };
-                let (_, icon_color) = Self::colors(layout, held_cell(x, y));
+                let (mut ix, mut iy) = (x + cell * cx as f32, y + cell * cy as f32);
+                // Corners of a square pad fall outside a round backing; pull the diagonals in.
+                if cx != 1 && cy != 1 && layout.shape != TouchShape::Square {
+                    ix += (1.0 - cx as f32) * cell * 0.2;
+                    iy += (1.0 - cy as f32) * cell * 0.2;
+                }
+                let held = held_cell(cx, cy);
+                if held {
+                    // Only the glow: the pad already has its backing.
+                    Self::draw_plate(&arrows, ix, iy, cell, false, true, art, ctx)?;
+                }
 
-                icons.add_rect_scaled_tinted(
-                    rect.left as f32 + cell * x as f32 + (cell - icon_side) / 2.0,
-                    rect.top as f32 + cell * y as f32 + (cell - icon_side) / 2.0,
-                    icon_color,
-                    icon_side / ICON,
-                    icon_side / ICON,
-                    &Rect::new_size(icon_x * 32, y * 32, 32, 32),
-                );
+                let icon = if self.interact_icon && cx == 1 && cy == 2 { Icon::Cell(3, 2) } else { Icon::Cell(cx, cy) };
+                Self::draw_icon(&arrows, icon, ix, iy, cell, held, art, ctx)?;
             }
         }
-        icons.draw(ctx)
+
+        Ok(())
     }
 }

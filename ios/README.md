@@ -23,8 +23,10 @@ Saves and settings live in `user` next to `data`, and logs in `logs`, all visibl
 
 ## Touch controls
 
-Options > Controls > Touch controls sets the buttons' opacity and size, and "Move buttons..." lets you
-drag each one into place. The layout is saved in `user/settings.json` (`touch_layout`).
+Options > Controls > Touch controls sets the buttons' opacity, size, icons (Classic, Bold, Text),
+colour, backing shape, d-pad look (arrows or a stick) and whether the weapon-switch buttons show, and
+"Move buttons..." lets you drag each one into place. The layout is saved in `user/settings.json`
+(`touch_layout`). `make_touch_art.ps1` regenerates the button art (`touch_icons.png`, `touch_plate.png`).
 
 To try the phone controls on a PC build, set `CAVESTORY_TOUCH=1` (the mouse acts as a finger) and
 start with `--window-width 1266 --window-height 585` for an iPhone-shaped window; `CAVESTORY_DATA_DIR`

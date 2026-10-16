@@ -200,7 +200,47 @@
           "jump": "ジャンプ",
           "shoot": "ショット",
           "inventory": "アイテム",
-          "pause": "ポーズ"
+          "pause": "ポーズ",
+          "prev_weapon": "まえ",
+          "next_weapon": "つぎ"
+        },
+        "icons": {
+          "entry": "アイコン：",
+          "classic": "クラシック",
+          "bold": "ふとい",
+          "text": "もじ"
+        },
+        "color": {
+          "entry": "いろ：",
+          "ice": "アイス",
+          "white": "しろ",
+          "red": "あか",
+          "gold": "きん",
+          "green": "みどり",
+          "purple": "むらさき",
+          "pink": "ピンク"
+        },
+        "shape": {
+          "entry": "かたち：",
+          "round": "まる",
+          "square": "しかく",
+          "none": "なし"
+        },
+        "dpad": {
+          "entry": "じゅうじキー：",
+          "arrows": "やじるし",
+          "stick": "スティック"
+        },
+        "weapon_buttons": "ぶきボタン：",
+        "text": {
+          "dpad": "いどう",
+          "jump": "ジャンプ",
+          "shoot": "ショット",
+          "inventory": "アイテム",
+          "pause": "ポーズ",
+          "prev_weapon": "<ぶき",
+          "next_weapon": "ぶき>",
+          "skip": "スキップ"
         }
       },
       "select_player": {

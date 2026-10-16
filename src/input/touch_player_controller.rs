@@ -30,8 +30,8 @@ bitfield! {
     pub inventory, set_inventory: 5;
     pub jump, set_jump: 6;
     pub shoot, set_shoot: 7;
-    pub next_weapon, _: 8;
-    pub prev_weapon, _: 9;
+    pub next_weapon, set_next_weapon: 8;
+    pub prev_weapon, set_prev_weapon: 9;
     pub pause, set_pause: 10;
 }
 
@@ -85,6 +85,15 @@ impl PlayerController for TouchPlayerController {
                     self.state.set_jump(self.state.jump() || point.is_in(geometry.rect(layout, TouchButton::Jump)));
                     self.state.set_shoot(self.state.shoot() || point.is_in(geometry.rect(layout, TouchButton::Shoot)));
                     self.state.set_pause(self.state.pause() || point.is_in(geometry.rect(layout, TouchButton::Pause)));
+
+                    if layout.weapon_buttons {
+                        self.state.set_prev_weapon(
+                            self.state.prev_weapon() || point.is_in(geometry.rect(layout, TouchButton::PrevWeapon)),
+                        );
+                        self.state.set_next_weapon(
+                            self.state.next_weapon() || point.is_in(geometry.rect(layout, TouchButton::NextWeapon)),
+                        );
+                    }
                 }
 
                 let inventory = geometry.rect(layout, TouchButton::Inventory);
