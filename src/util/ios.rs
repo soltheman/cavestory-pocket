@@ -1,5 +1,8 @@
 //! UIKit calls the iOS build needs that SDL2 doesn't wrap.
 
+// objc 0.2's msg_send! checks cfg(feature = "cargo-clippy"), which newer rustc warns about.
+#![allow(unexpected_cfgs)]
+
 use objc::runtime::Object;
 use objc::{class, msg_send, sel, sel_impl};
 

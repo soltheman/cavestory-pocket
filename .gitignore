@@ -63,3 +63,5 @@ $RECYCLE.BIN/
 *.log
 
 3rdparty/
+# Downloaded iPhone builds
+/dist/
