@@ -177,6 +177,8 @@ pub struct TouchLayout {
     pub dpad_style: TouchDpadStyle,
     /// Whether the previous/next weapon buttons are shown.
     pub weapon_buttons: bool,
+    /// Haptic taps when the player is hurt and during quakes (phones only).
+    pub vibration: bool,
     /// Button centres as fractions of the safe area; `None` keeps the default spot.
     pub dpad: Option<(f32, f32)>,
     pub jump: Option<(f32, f32)>,
@@ -197,6 +199,7 @@ impl Default for TouchLayout {
             shape: TouchShape::Round,
             dpad_style: TouchDpadStyle::Arrows,
             weapon_buttons: true,
+            vibration: true,
             dpad: None,
             jump: None,
             shoot: None,

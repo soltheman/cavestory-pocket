@@ -261,7 +261,8 @@ impl PlayerController for TouchPlayerController {
         }
     }
 
-    fn set_rumble(&mut self, _low_freq: u16, _hi_freq: u16, _ticks: u32) {
-        // we could probably vibrate the phone? do mobile games do that?
+    fn set_rumble(&mut self, low_freq: u16, hi_freq: u16, _ticks: u32) {
+        // Only getting hurt rumbles the player's controller; on a phone that's one haptic tap.
+        crate::framework::haptics::hit(low_freq.max(hi_freq));
     }
 }

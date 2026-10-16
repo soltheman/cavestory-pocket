@@ -15,6 +15,7 @@ pub mod filesystem;
 pub mod frame_pacer;
 pub mod gamepad;
 pub mod graphics;
+pub mod haptics;
 pub mod input;
 pub mod keyboard;
 pub mod render;

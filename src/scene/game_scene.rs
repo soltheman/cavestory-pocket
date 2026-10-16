@@ -1183,11 +1183,17 @@ impl Scene for GameScene {
 
         if state.quake_rumble_counter > 0 {
             gamepad::set_quake_rumble_all(ctx, state, state.quake_rumble_counter)?;
+            if state.settings.touch_controls {
+                crate::framework::haptics::quake(0x3000, state.quake_rumble_counter);
+            }
             state.quake_rumble_counter = 0;
         }
 
         if state.super_quake_rumble_counter > 0 {
             gamepad::set_super_quake_rumble_all(ctx, state, state.super_quake_rumble_counter)?;
+            if state.settings.touch_controls {
+                crate::framework::haptics::quake(0x5000, state.super_quake_rumble_counter);
+            }
             state.super_quake_rumble_counter = 0;
         }
 

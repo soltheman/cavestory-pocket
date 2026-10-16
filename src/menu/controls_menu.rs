@@ -85,6 +85,7 @@ enum TouchMenuEntry {
     Shape,
     Dpad,
     WeaponButtons,
+    Vibration,
     Move,
     Reset,
     Back,
@@ -344,6 +345,10 @@ impl ControlsMenu {
                 state.loc.t("menus.controls_menu.touch_menu.weapon_buttons").to_owned(),
                 layout.weapon_buttons,
             ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::Vibration,
+            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.vibration").to_owned(), layout.vibration),
         );
         self.touch.push_entry(
             TouchMenuEntry::Move,
@@ -1357,6 +1362,15 @@ impl ControlsMenu {
                     if let MenuEntry::Toggle(_, value) = toggle {
                         state.settings.touch_layout.weapon_buttons = !state.settings.touch_layout.weapon_buttons;
                         *value = state.settings.touch_layout.weapon_buttons;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::Vibration, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.vibration = !layout.vibration;
+                        *value = layout.vibration;
+                        crate::framework::haptics::set_enabled(layout.vibration);
                         let _ = state.settings.save(ctx);
                     }
                 }

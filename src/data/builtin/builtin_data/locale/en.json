@@ -234,6 +234,7 @@
           "stick": "Stick"
         },
         "weapon_buttons": "Weapon buttons:",
+        "vibration": "Vibration:",
         "text": {
           "dpad": "MOVE",
           "jump": "JUMP",

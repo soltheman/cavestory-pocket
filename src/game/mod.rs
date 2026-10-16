@@ -206,6 +206,7 @@ impl Game {
                         for _ in 0..loops {
                             scene.tick(state_ref, ctx)?;
                             state_ref.touch_controls.end_tick();
+                            crate::framework::haptics::tick();
                         }
                     }
                     self.fps.tick_count = self.fps.tick_count.saturating_add(loops);
@@ -216,6 +217,7 @@ impl Game {
                     let state_ref = self.state.get_mut();
                     scene.tick(state_ref, ctx)?;
                     state_ref.touch_controls.end_tick();
+                    crate::framework::haptics::tick();
                 }
             }
         }

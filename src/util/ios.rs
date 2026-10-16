@@ -37,6 +37,31 @@ pub fn open_url(url: &str) {
     }
 }
 
+thread_local! {
+    /// UIKit's feedback generator, kept around so it stays warmed up between taps.
+    static IMPACT: std::cell::Cell<*mut Object> = std::cell::Cell::new(std::ptr::null_mut());
+}
+
+/// One haptic tap from a heavy impact generator; `intensity` is 0.0 to 1.0.
+pub fn haptic_impact(intensity: f32) {
+    const UI_IMPACT_FEEDBACK_STYLE_HEAVY: isize = 2;
+
+    IMPACT.with(|cell| unsafe {
+        let mut generator = cell.get();
+        if generator.is_null() {
+            let alloc: *mut Object = msg_send![class!(UIImpactFeedbackGenerator), alloc];
+            generator = msg_send![alloc, initWithStyle: UI_IMPACT_FEEDBACK_STYLE_HEAVY];
+            if generator.is_null() {
+                return;
+            }
+            cell.set(generator);
+        }
+
+        let _: () = msg_send![generator, impactOccurredWithIntensity: intensity.clamp(0.0, 1.0) as f64];
+        let _: () = msg_send![generator, prepare];
+    });
+}
+
 /// Safe-area insets of the game's window in points, as (left, top, right, bottom).
 pub fn safe_area_insets() -> (f32, f32, f32, f32) {
     unsafe {
