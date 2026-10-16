@@ -32,5 +32,9 @@ points at a copy of the game's `data` folder.
 
 ## Icons
 
-`make_curly_icon.ps1` draws the Curly icon (`curly-icon-1024.png`, original pixel art), and
-`make_icons.ps1` turns it into the sizes in `icons/`.
+The released app uses doukutsu-rs's icon; `make_icons.ps1` regenerates `icons/` from
+`res/macos/512x512@2x.png`.
+
+For Curly as the icon on your own phone, run `curly_icon_ipa.ps1 -Ipa <downloaded ipa>`. It takes
+her portrait from your game files and writes a personal `-curly.ipa` to sideload. Game art never
+goes in this repo or its releases.
