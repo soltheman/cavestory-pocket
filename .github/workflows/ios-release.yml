@@ -1,0 +1,63 @@
+name: ios-release
+# Manual only: nothing runs on push, so no build is wasted.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.0). Empty = build only, upload as artifact."
+        required: false
+        default: ""
+permissions:
+  contents: write
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup toolchain install stable --profile minimal && rustup target add aarch64-apple-ios
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ios-ipa-${{ hashFiles('Cargo.lock') }}
+          restore-keys: ios-ipa-
+      - name: Build doukutsu-rs for iOS
+        env:
+          IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+        run: |
+          set -o pipefail
+          cargo build --release --target aarch64-apple-ios --bin doukutsu-rs \
+            --no-default-features --features default-base,backend-sdl,render-opengl,exe 2>&1 | tee build.log
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP="Payload/CaveStory.app"
+          rm -rf Payload && mkdir -p "$APP"
+          cp target/aarch64-apple-ios/release/doukutsu-rs "$APP/doukutsu-rs"
+          cp ios/Info.plist "$APP/Info.plist"
+          cp ios/icons/AppIcon60x60* ios/icons/AppIcon76x76* ios/icons/AppIcon83.5x83.5* "$APP/"
+          plutil -lint "$APP/Info.plist"
+          file "$APP/doukutsu-rs"
+          zip -qr CaveStoryPocket.ipa Payload
+          ls -lh CaveStoryPocket.ipa
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cavestory-ipa
+          path: |
+            CaveStoryPocket.ipa
+            build.log
+      - name: Publish release
+        if: ${{ inputs.tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          gh release create "$RELEASE_TAG" CaveStoryPocket.ipa \
+            --target "$GITHUB_SHA" \
+            --title "Cave Story+ Pocket $RELEASE_TAG" \
+            --prerelease \
+            --notes "Unsigned iPhone build of doukutsu-rs. Game files are not included: copy your own Cave Story+ data folder in with the Files app."

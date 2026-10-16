@@ -94,6 +94,24 @@ impl Scene for NoDataScene {
             y += 20.0;
         }
 
+        #[cfg(target_os = "ios")]
+        {
+            let yellow = (255, 255, 0, 255);
+            for line in [
+                "Copy your Cave Story+ \"data\" folder into",
+                "Files > On My iPhone > Cave Story+,",
+                "then close and reopen the app.",
+            ] {
+                state.font.builder().center(state.canvas_size.0).y(y).color(yellow).draw(
+                    line,
+                    ctx,
+                    &state.constants,
+                    &mut state.texture_set,
+                )?;
+                y += 20.0;
+            }
+        }
+
         {
             // put max 80 chars per line
             let mut lines = Vec::new();

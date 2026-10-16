@@ -29,6 +29,29 @@ fn main() {
         println!("cargo:rustc-link-arg=CoreHaptics");
     }
 
+    if target.contains("apple-ios") {
+        // The bundled static SDL2 does not emit its iOS framework links.
+        for framework in [
+            "AudioToolbox",
+            "AVFoundation",
+            "CoreAudio",
+            "CoreBluetooth",
+            "CoreFoundation",
+            "CoreGraphics",
+            "CoreHaptics",
+            "CoreMotion",
+            "Foundation",
+            "GameController",
+            "Metal",
+            "OpenGLES",
+            "QuartzCore",
+            "UIKit",
+        ] {
+            println!("cargo:rustc-link-lib=framework={}", framework);
+        }
+        println!("cargo:rustc-link-lib=iconv");
+    }
+
     if target.contains("android") {
         println!("cargo:rustc-link-lib=dylib=GLESv2");
         println!("cargo:rustc-link-lib=dylib=EGL");

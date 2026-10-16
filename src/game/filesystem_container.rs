@@ -10,6 +10,14 @@ use crate::{
     },
 };
 
+/// The app's Documents folder, which the Files app shows under On My iPhone.
+#[cfg(target_os = "ios")]
+pub(crate) fn ios_documents_dir() -> PathBuf {
+    let mut dir = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+    dir.push("Documents");
+    dir
+}
+
 pub struct FilesystemContainer {
     pub user_path: PathBuf,
     pub game_path: PathBuf,
@@ -23,7 +31,16 @@ impl FilesystemContainer {
     }
 
     pub fn mount_fs(&mut self, context: &mut Context) -> GameResult {
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
+        // The player copies the game's `data` folder into the app's Documents folder with the Files app.
+        // Saves go next to it in `user`, which turns on portable mode below.
+        #[cfg(target_os = "ios")]
+        let resource_dir = {
+            let documents = ios_documents_dir();
+            let _ = std::fs::create_dir_all(documents.join("user"));
+            documents.join("data")
+        };
+
+        #[cfg(not(any(target_os = "android", target_os = "horizon", target_os = "ios")))]
         let resource_dir = if let Ok(data_dir) = std::env::var("CAVESTORY_DATA_DIR") {
             PathBuf::from(data_dir)
         } else {
@@ -194,6 +211,13 @@ impl FilesystemContainer {
         #[cfg(target_os = "horizon")]
         return Ok(()); // can't open directories on switch
 
+        // `open` shells out to `uiopen`, which iOS doesn't have; ask the Files app instead.
+        #[cfg(target_os = "ios")]
+        {
+            crate::util::ios::open_url(&format!("shareddocuments://{}", path.display()));
+            return Ok(());
+        }
+
         #[cfg(target_os = "android")]
         unsafe {
             use jni::objects::{JObject, JValue};
@@ -211,7 +235,7 @@ impl FilesystemContainer {
             return Ok(());
         }
 
-        #[cfg(not(any(target_os = "android", target_os = "horizon")))]
+        #[cfg(not(any(target_os = "android", target_os = "horizon", target_os = "ios")))]
         open::that(path).map_err(|e| {
             use crate::framework::error::GameError;
             GameError::FilesystemError(format!("Failed to open directory: {}", e))

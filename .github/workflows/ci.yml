@@ -1,21 +1,9 @@
 name: CI
 
+# CaveStory-Pocket: upstream's desktop/Android CI is manual only here, so pushes don't burn
+# Actions minutes. The iPhone build is ios-release.yml.
 on:
-  push:
-    branches-ignore:
-      - cpp-rewrite
-      - refactor
-    paths-ignore:
-      - ".gitignore"
-      - ".github/*"
-      - "**.md"
-      - "LICENSE"
-      - "misc/**"
-      - "res/**"
   workflow_dispatch:
-  release:
-    types:
-      - released
 
 defaults:
   run:

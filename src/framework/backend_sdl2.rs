@@ -65,6 +65,13 @@ impl SDL2Backend {
     pub fn new(window_params: WindowParams) -> GameResult<Box<dyn Backend>> {
         sdl2::hint::set("SDL_JOYSTICK_THREAD", "1");
 
+        #[cfg(target_os = "ios")]
+        {
+            sdl2::hint::set("SDL_IOS_ORIENTATIONS", "LandscapeLeft LandscapeRight");
+            // A swipe from the bottom edge first shows the home indicator instead of leaving the game.
+            sdl2::hint::set("SDL_IOS_HIDE_HOME_INDICATOR", "2");
+        }
+
         let context = sdl2::init().map_err(GameError::WindowError)?;
 
         let backend = SDL2Backend { context };
@@ -343,6 +350,15 @@ impl SDL2EventLoop {
         match event {
             Event::Quit { .. } => {
                 ctx.shutdown_requested = true;
+            }
+            // iOS kills apps that draw with OpenGL ES in the background, whatever pause_on_focus_loss says.
+            #[cfg(target_os = "ios")]
+            Event::AppWillEnterBackground { .. } => {
+                game.enter_background(ctx);
+            }
+            #[cfg(target_os = "ios")]
+            Event::AppDidEnterForeground { .. } => {
+                game.enter_foreground(ctx);
             }
             Event::Window { win_event, .. } => match win_event {
                 WindowEvent::FocusGained | WindowEvent::Shown => {
@@ -626,8 +642,9 @@ impl BackendEventLoop for SDL2EventLoop {
 
         // SDL has no API for this so we need to guess :)
         ctx.flags.set_supports_windowed_fullscreen(!IS_MOBILE && !IS_CONSOLE);
-        ctx.flags.set_has_touch_screen(false); // TODO: implement touch support in SDL backend
-        ctx.flags.set_supports_insets(cfg!(target_os = "android"));
+        // TODO: implement touch support in SDL backend (only iOS reports its touch screen so far)
+        ctx.flags.set_has_touch_screen(cfg!(target_os = "ios"));
+        ctx.flags.set_supports_insets(cfg!(any(target_os = "android", target_os = "ios")));
         ctx.flags.set_form_factor(match (IS_MOBILE, IS_CONSOLE) {
             (true, _) => DeviceFormFactor::Mobile,
             (_, true) => DeviceFormFactor::Console,
@@ -680,6 +697,19 @@ impl BackendEventLoop for SDL2EventLoop {
                     Err(e) => {
                         log::error!("Failed to update insets: {}", e);
                     }
+                }
+            }
+
+            // Polled every frame: turning the phone between the two landscape sides moves the notch
+            // without resizing the window.
+            #[cfg(target_os = "ios")]
+            {
+                let (left, _top, right, _bottom) = crate::util::ios::safe_area_insets();
+                // Landscape only, so like Android the top and bottom insets would only waste screen space.
+                let insets = (left * ctx.viewport.dpi_scale.0, 0.0, right * ctx.viewport.dpi_scale.0, 0.0);
+                if ctx.viewport.raw_insets != insets {
+                    ctx.viewport.raw_insets = insets;
+                    ctx.viewport.recompute();
                 }
             }
 

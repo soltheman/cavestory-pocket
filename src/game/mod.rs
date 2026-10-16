@@ -77,7 +77,7 @@ impl Default for LaunchOptions {
             server_mode: false,
             window_height: None,
             window_width: None,
-            window_fullscreen: cfg!(target_os = "android"),
+            window_fullscreen: cfg!(any(target_os = "android", target_os = "ios")),
             prefer_renderer: None,
             log_level: if cfg!(debug_assertions) { LogLevel::Debug } else { LogLevel::Info },
         }
@@ -334,6 +334,22 @@ impl Game {
     }
 }
 
+#[cfg(target_os = "ios")]
+impl Game {
+    /// Stops drawing and pauses sound before iOS backgrounds the app.
+    pub(crate) fn enter_background(&mut self, ctx: &mut Context) {
+        ctx.suspended = true;
+        self.state.get_mut().sound_manager.pause(ctx);
+    }
+
+    pub(crate) fn enter_foreground(&mut self, ctx: &mut Context) {
+        ctx.suspended = false;
+        self.state.get_mut().sound_manager.resume(ctx);
+        self.loops = 0;
+        self.pacer.reset();
+    }
+}
+
 impl BackendCallbacks for Game {
     fn on_resize(&mut self, ctx: &mut Context) -> GameResult {
         self.state.get_mut().handle_resize(ctx)?;
@@ -418,7 +434,13 @@ fn get_logs_dir() -> GameResult<PathBuf> {
         logs_dir = PathBuf::from("sdmc:/switch/doukutsu-rs");
     }
 
-    #[cfg(not(any(target_os = "android", target_os = "horizon")))]
+    // In the app's Documents folder, so logs can be read from the Files app.
+    #[cfg(target_os = "ios")]
+    {
+        logs_dir = crate::game::filesystem_container::ios_documents_dir();
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "horizon", target_os = "ios")))]
     {
         let project_dirs = match directories::ProjectDirs::from("", "", "doukutsu-rs") {
             Some(dirs) => dirs,
