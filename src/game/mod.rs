@@ -22,6 +22,7 @@ use crate::game::settings::{Settings, VSyncMode};
 use crate::game::shared_game_state::{Fps, SharedGameState, TimingMode, WindowMode};
 use crate::graphics::texture_set::{G_MAG, I_MAG};
 use crate::input::touch_controls::TouchArt;
+use crate::scene::game_scene::GameScene;
 use crate::scene::loading_scene::LoadingScene;
 use crate::scene::Scene;
 
@@ -122,6 +123,8 @@ pub struct Game {
     graph: PacingGraph,
     pub(crate) loops: u32,
     fps: Fps,
+    /// Set while a resume point from this session is on disk (the app is in the background).
+    resume_point_written: bool,
 }
 
 impl Game {
@@ -135,6 +138,7 @@ impl Game {
             graph: PacingGraph,
             loops: 0,
             fps: Fps::new(),
+            resume_point_written: false,
         };
 
         Ok(s)
@@ -342,19 +346,45 @@ impl Game {
     }
 }
 
-#[cfg(target_os = "ios")]
 impl Game {
-    /// Stops drawing and pauses sound before iOS backgrounds the app.
+    /// Stops drawing and pauses sound before iOS backgrounds the app, and leaves a resume point
+    /// in case the OS closes it while it's away.
+    #[cfg(target_os = "ios")]
     pub(crate) fn enter_background(&mut self, ctx: &mut Context) {
+        self.save_resume_point(ctx);
         ctx.suspended = true;
         self.state.get_mut().sound_manager.pause(ctx);
     }
 
+    #[cfg(target_os = "ios")]
     pub(crate) fn enter_foreground(&mut self, ctx: &mut Context) {
+        self.drop_resume_point(ctx);
         ctx.suspended = false;
         self.state.get_mut().sound_manager.resume(ctx);
         self.loops = 0;
         self.pacer.reset();
+    }
+
+    /// Writes a resume point if a game is being played (see `SharedGameState::write_resume_point`).
+    pub(crate) fn save_resume_point(&mut self, ctx: &mut Context) {
+        use downcast::Downcast;
+
+        let state = self.state.get_mut();
+        if let Some(scene) = self.scene.get_mut() {
+            if let Ok(game_scene) = Downcast::<GameScene>::downcast_mut(scene.as_mut()) {
+                match state.write_resume_point(game_scene, ctx) {
+                    Ok(written) => self.resume_point_written = written,
+                    Err(e) => log::error!("Failed to write a resume point: {}", e),
+                }
+            }
+        }
+    }
+
+    /// Back in the foreground without having been closed, so this session's resume point isn't needed.
+    pub(crate) fn drop_resume_point(&mut self, ctx: &mut Context) {
+        if std::mem::take(&mut self.resume_point_written) {
+            self.state.get_mut().delete_resume_points(ctx);
+        }
     }
 }
 

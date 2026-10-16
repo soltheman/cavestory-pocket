@@ -96,8 +96,11 @@ impl PauseMenu {
         );
         self.pause_menu
             .push_entry(PauseMenuEntry::Title, MenuEntry::Active(state.loc.t("menus.pause_menu.title").to_owned()));
-        self.pause_menu
-            .push_entry(PauseMenuEntry::Quit, MenuEntry::Active(state.loc.t("menus.pause_menu.quit").to_owned()));
+        // iOS apps don't quit themselves.
+        if ctx.flags.supports_quit() {
+            self.pause_menu
+                .push_entry(PauseMenuEntry::Quit, MenuEntry::Active(state.loc.t("menus.pause_menu.quit").to_owned()));
+        }
 
         self.confirm_menu.push_entry(ConfirmMenuEntry::Empty, MenuEntry::Disabled(String::new()));
         self.confirm_menu.push_entry(ConfirmMenuEntry::Yes, MenuEntry::Active(state.loc.t("common.yes").to_owned()));

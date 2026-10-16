@@ -19,7 +19,7 @@ use crate::game::caret::{Caret, CaretType};
 use crate::game::npc::NPCTable;
 use crate::game::player::TargetPlayer;
 use crate::game::profile::GameProfile;
-use crate::game::scripting::tsc::credit_script::{CreditScript, CreditScriptVM};
+use crate::game::scripting::tsc::credit_script::{CreditScript, CreditScriptExecutionState, CreditScriptVM};
 use crate::game::scripting::tsc::text_script::{
     ScriptMode, TextScript, TextScriptEncoding, TextScriptExecutionState, TextScriptVM,
 };
@@ -636,6 +636,7 @@ impl SharedGameState {
     }
 
     pub fn start_new_game(&mut self, ctx: &mut Context) -> GameResult {
+        self.delete_resume_points(ctx);
         self.reset();
 
         #[cfg(feature = "discord-rpc")]
@@ -705,7 +706,82 @@ impl SharedGameState {
         Ok(())
     }
 
+    /// The resume point for a save slot: separate from the slot's own save.
+    fn resume_filename(slot: usize) -> String {
+        format!("/Resume{}.dat", slot)
+    }
+
+    /// Saves a resume point when a phone sends the game to the background, so being closed by the OS
+    /// doesn't lose the progress since the last save disk. Only at calm moments: the player in control,
+    /// no script, credits or boss fight running, and not in a challenge, so resuming can't strand them.
+    /// Returns whether one was written.
+    pub fn write_resume_point(&mut self, game_scene: &mut GameScene, ctx: &mut Context) -> GameResult<bool> {
+        let calm = self.mod_path.is_none()
+            && !game_scene.intro_mode
+            && self.control_flags.control_enabled()
+            && matches!(self.textscript_vm.state, TextScriptExecutionState::Ended)
+            && matches!(self.creditscript_vm.state, CreditScriptExecutionState::Ended)
+            && game_scene.player1.cond.alive()
+            && game_scene.player1.life > 0
+            && !game_scene.boss_life_bar.is_active();
+
+        if !calm {
+            log::info!("Not a safe moment for a resume point, skipping it.");
+            return Ok(false);
+        }
+
+        let file = filesystem::open_options(
+            ctx,
+            Self::resume_filename(self.save_slot),
+            OpenOptions::new().write(true).create(true),
+        )?;
+        GameProfile::dump(self, game_scene, None).write_save(file)?;
+        log::info!("Wrote a resume point for save slot {}.", self.save_slot);
+
+        Ok(true)
+    }
+
+    /// The save slot that has a resume point waiting, if any.
+    pub fn find_resume_point(&self, ctx: &Context) -> Option<usize> {
+        (1..=9).find(|&slot| filesystem::user_exists(ctx, Self::resume_filename(slot)))
+    }
+
+    pub fn delete_resume_points(&self, ctx: &Context) {
+        for slot in 1..=9 {
+            let path = Self::resume_filename(slot);
+            if filesystem::user_exists(ctx, &path) {
+                let _ = filesystem::user_delete(ctx, &path);
+            }
+        }
+    }
+
+    /// Continues from a resume point, back on its save slot. The point is used up.
+    pub fn load_resume_point(&mut self, ctx: &mut Context, slot: usize) -> GameResult {
+        let path = Self::resume_filename(slot);
+        let profile = filesystem::user_open(ctx, &path).ok().and_then(|file| GameProfile::load_from_save(file).ok());
+        self.delete_resume_points(ctx);
+        self.save_slot = slot;
+
+        let Some(profile) = profile else {
+            log::warn!("Resume point for slot {} is unreadable, loading the save instead.", slot);
+            return self.load_or_start_game(ctx);
+        };
+
+        self.reset();
+        let mut next_scene = GameScene::new(self, ctx, profile.current_map as usize)?;
+        profile.apply(self, &mut next_scene, ctx);
+
+        #[cfg(feature = "discord-rpc")]
+        self.discord_rpc.update_difficulty(self.difficulty)?;
+
+        self.next_scene = Some(Box::new(next_scene));
+        Ok(())
+    }
+
     pub fn load_or_start_game(&mut self, ctx: &mut Context) -> GameResult {
+        // Playing anything else makes a waiting resume point stale.
+        self.delete_resume_points(ctx);
+
         if let Some(save_path) = self.get_save_filename(self.save_slot) {
             if let Ok(data) = filesystem::user_open(ctx, save_path) {
                 match GameProfile::load_from_save(data) {

@@ -35,6 +35,7 @@ enum CurrentMenu {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum MainMenuEntry {
+    Resume,
     Start,
     Challenges,
     Options,
@@ -92,6 +93,8 @@ pub struct TitleScene {
     compact_jukebox: CompactJukebox,
     stage: Stage,
     textures: StageTexturePaths,
+    /// Save slot of a resume point left by the OS closing the game in the background.
+    resume_slot: Option<usize>,
 }
 
 impl TitleScene {
@@ -134,6 +137,7 @@ impl TitleScene {
             compact_jukebox: CompactJukebox::new(),
             stage: fake_stage,
             textures,
+            resume_slot: None,
         }
     }
 
@@ -209,6 +213,14 @@ impl Scene for TitleScene {
         self.controller.add(state.settings.create_player1_controller());
         self.controller.add(state.settings.create_player2_controller());
 
+        // The OS closed the game in the background last time: offer to pick up from there.
+        self.resume_slot = state.find_resume_point(ctx);
+        if self.resume_slot.is_some() {
+            self.main_menu
+                .push_entry(MainMenuEntry::Resume, MenuEntry::Active(state.loc.t("menus.main_menu.resume").to_owned()));
+            self.main_menu.selected = MainMenuEntry::Resume;
+        }
+
         self.main_menu
             .push_entry(MainMenuEntry::Start, MenuEntry::Active(state.loc.t("menus.main_menu.start").to_owned()));
 
@@ -234,8 +246,11 @@ impl Scene for TitleScene {
             );
         }
 
-        self.main_menu
-            .push_entry(MainMenuEntry::Quit, MenuEntry::Active(state.loc.t("menus.main_menu.quit").to_owned()));
+        // iOS apps don't quit themselves.
+        if ctx.flags.supports_quit() {
+            self.main_menu
+                .push_entry(MainMenuEntry::Quit, MenuEntry::Active(state.loc.t("menus.main_menu.quit").to_owned()));
+        }
 
         self.settings_menu.init(state, ctx)?;
 
@@ -337,6 +352,13 @@ impl Scene for TitleScene {
 
         match self.current_menu {
             CurrentMenu::MainMenu => match self.main_menu.tick(&mut self.controller, state) {
+                MenuSelectionResult::Selected(MainMenuEntry::Resume, _) => {
+                    if let Some(slot) = self.resume_slot.take() {
+                        state.mod_path = None;
+                        state.reload_resources(ctx)?;
+                        state.load_resume_point(ctx, slot)?;
+                    }
+                }
                 MenuSelectionResult::Selected(MainMenuEntry::Start, _) => {
                     state.mod_path = None;
                     self.save_select_menu.init(state, ctx)?;

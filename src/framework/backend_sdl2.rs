@@ -379,6 +379,9 @@ impl SDL2EventLoop {
                 WindowEvent::SizeChanged(_, _) => {
                     Self::refresh_viewport_metrics(ctx, game, refs);
                 }
+                // Touch testing on a computer: minimising stands in for the phone sending the app away.
+                WindowEvent::Minimized if touch_emulated() => game.save_resume_point(ctx),
+                WindowEvent::Restored if touch_emulated() => game.drop_resume_point(ctx),
                 _ => {}
             },
             Event::KeyDown { scancode: Some(scancode), repeat, keymod, .. } => {

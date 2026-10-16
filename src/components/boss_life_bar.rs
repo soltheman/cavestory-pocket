@@ -28,6 +28,11 @@ impl BossLifeBar {
         BossLifeBar { target: BossLifeTarget::None, life: 0, max_life: 0, prev_life: 0, counter: 0 }
     }
 
+    /// Whether a boss fight is on (the bar is tracking a living boss).
+    pub fn is_active(&self) -> bool {
+        self.target != BossLifeTarget::None
+    }
+
     pub fn set_npc_target(&mut self, npc_id: u16, npc_list: &NPCList, npc_token: &NPCAccessToken) {
         if let Some(npc) = npc_list.get_npc(npc_id as usize) {
             let npc = npc.borrow(npc_token);

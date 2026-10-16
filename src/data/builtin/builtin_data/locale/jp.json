@@ -12,6 +12,7 @@
   },
   "menus": {
     "main_menu": {
+      "resume": "つづきから",
       "start": "ゲームスタート",
       "challenges": "チャレンジ",
       "options": "オプション",

@@ -12,6 +12,7 @@
   },
   "menus": {
     "main_menu": {
+      "resume": "Resume",
       "start": "Start Game",
       "challenges": "Challenges",
       "options": "Options",

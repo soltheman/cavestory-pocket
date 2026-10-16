@@ -21,6 +21,13 @@ The Steam 2026 update's format is not supported yet (upstream issue #365).
 
 Saves and settings live in `user` next to `data`, and logs in `logs`, all visible in the Files app.
 
+## Resume after iOS closes the game
+
+Leaving the app mid-game writes `user/Resume<slot>.dat` (only when the player is in control, with no
+cutscene, credits or boss fight running). If iOS closes the app while it's away, the title screen offers
+**Resume** to continue from there; coming back normally deletes the file. Rooms restart as when loading a
+save. On a PC with `CAVESTORY_TOUCH=1`, minimising the window does the same, for testing.
+
 ## Touch controls
 
 Options > Controls > Touch controls sets the buttons' opacity, size, icons (Classic, Bold, Text),
