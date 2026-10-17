@@ -235,6 +235,8 @@
           "stick": "Stick"
         },
         "weapon_buttons": "Weapon buttons:",
+        "floating_stick": "Floating stick:",
+        "forgiving_buttons": "Forgiving buttons:",
         "vibration": "Vibration:",
         "map_button": "Map button:",
         "button_taps": "Button taps:",

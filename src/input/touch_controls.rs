@@ -184,6 +184,10 @@ pub struct TouchLayout {
     pub weapon_buttons: bool,
     /// Whether the Map button is shown.
     pub map_button: bool,
+    /// The d-pad appears wherever the left thumb lands on the left half of the screen.
+    pub floating_stick: bool,
+    /// Buttons' touch areas reach a little past their drawings.
+    pub forgiving_buttons: bool,
     /// A light tick when an on-screen button is pressed (phones only).
     pub button_taps: bool,
     /// Haptic taps when the player is hurt and during quakes (phones only).
@@ -210,6 +214,8 @@ impl Default for TouchLayout {
             dpad_style: TouchDpadStyle::Arrows,
             weapon_buttons: true,
             map_button: true,
+            floating_stick: false,
+            forgiving_buttons: true,
             button_taps: true,
             vibration: true,
             dpad: None,
@@ -333,7 +339,7 @@ impl TouchGeometry {
         }
     }
 
-    fn clamp(&self, button: TouchButton, x: f32, y: f32) -> (f32, f32) {
+    pub fn clamp(&self, button: TouchButton, x: f32, y: f32) -> (f32, f32) {
         let half = self.extent(button) / 2.0;
         let (left, top, right, bottom) = self.area;
 
@@ -365,13 +371,36 @@ impl TouchGeometry {
         Rect::new_size((x - side / 2.0) as isize, (y - side / 2.0) as isize, side as isize, side as isize)
     }
 
-    /// D-pad directions (left, up, right, down) held by a touch. A touch that started on the pad keeps
-    /// steering when the thumb drifts past its edge; other touches must be on the pad itself.
+    /// The centre a touch steers the d-pad around and how far from it the touch still counts, or `None`
+    /// when the touch isn't steering it. A touch that started on the pad keeps steering when the thumb
+    /// drifts past its edge; other touches must be on the pad itself. With the floating stick, any touch
+    /// that starts on the left half of the screen (and not on another button) steers around where it went down.
+    pub fn dpad_anchor(&self, layout: &TouchLayout, point: &TouchPoint) -> Option<(f32, f32, f32)> {
+        if layout.floating_stick {
+            let (left, _, right, _) = self.area;
+            let (x, y) = (point.first_position.0 as f32, point.first_position.1 as f32);
+            let on_other_button = layout
+                .visible_buttons()
+                .into_iter()
+                .any(|button| button != TouchButton::DPad && point.first_position_in(self.rect(layout, button)));
+
+            return (x < (left + right) / 2.0 && !on_other_button).then_some((x, y, self.cell * 3.0));
+        }
+
+        let (cx, cy) = self.center(layout, TouchButton::DPad);
+        let reach = if point.first_position_in(self.rect(layout, TouchButton::DPad)) {
+            self.cell * 2.5
+        } else {
+            self.cell * 1.5
+        };
+
+        Some((cx, cy, reach))
+    }
+
+    /// D-pad directions (left, up, right, down) held by a touch (see `dpad_anchor`).
     /// Straight directions get wider slices than diagonals, so walking rarely presses down by accident.
     pub fn dpad_directions(&self, layout: &TouchLayout, point: &TouchPoint) -> Option<(bool, bool, bool, bool)> {
-        let (cx, cy) = self.center(layout, TouchButton::DPad);
-        let started_on_pad = point.first_position_in(self.rect(layout, TouchButton::DPad));
-        let reach = if started_on_pad { self.cell * 2.5 } else { self.cell * 1.5 };
+        let (cx, cy, reach) = self.dpad_anchor(layout, point)?;
 
         let (dx, dy) = (point.position.0 as f32 - cx, point.position.1 as f32 - cy);
         let distance = (dx * dx + dy * dy).sqrt();
@@ -386,6 +415,38 @@ impl TouchGeometry {
         // Degrees clockwise from "right", as y grows downwards.
         let angle = dy.atan2(dx).to_degrees();
         Some((angle.abs() >= 120.0, (-150.0..=-30.0).contains(&angle), angle.abs() <= 60.0, (30.0..=150.0).contains(&angle)))
+    }
+
+    /// How far a button's touch area reaches past its drawing.
+    fn hit_margin(&self, layout: &TouchLayout) -> f32 {
+        if layout.forgiving_buttons {
+            self.cell * 0.25
+        } else {
+            0.0
+        }
+    }
+
+    /// A button's touch area: its drawing, plus a margin with forgiving buttons on.
+    pub fn hit_rect(&self, layout: &TouchLayout, button: TouchButton) -> Rect<isize> {
+        let rect = self.rect(layout, button);
+        let margin = self.hit_margin(layout) as isize;
+        Rect::new(rect.left - margin, rect.top - margin, rect.right + margin, rect.bottom + margin)
+    }
+
+    /// The button (other than the d-pad) under a touch at (x, y). Where enlarged touch areas overlap,
+    /// the closest button wins, so one press never hits two. The Map button counts only once owned.
+    pub fn button_at(&self, layout: &TouchLayout, x: f32, y: f32, has_map: bool) -> Option<TouchButton> {
+        layout
+            .visible_buttons()
+            .into_iter()
+            .filter(|&button| button != TouchButton::DPad && (button != TouchButton::Map || has_map))
+            .filter(|&button| TouchPoint::contains(self.hit_rect(layout, button), (x as f64, y as f64)))
+            .map(|button| {
+                let (cx, cy) = self.center(layout, button);
+                (button, (x - cx) * (x - cx) + (y - cy) * (y - cy))
+            })
+            .min_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(button, _)| button)
     }
 }
 
@@ -514,6 +575,19 @@ impl TouchControls {
         false
     }
 
+    /// Like `consume_click_in`, for a press that `hit` accepts.
+    pub fn consume_click_where(&mut self, hit: impl Fn(&TouchPoint) -> bool) -> bool {
+        self.clicks.retain(|p| p.touch_id != 0);
+
+        if let Some(point) = self.clicks.iter_mut().find(|p| hit(p)) {
+            point.touch_id = 0;
+
+            return true;
+        }
+
+        false
+    }
+
     pub fn consume_tap_in(&mut self, bounds: Rect) -> bool {
         if let Some(index) = self.taps.iter().position(|&tap| TouchPoint::contains(bounds, tap)) {
             self.taps.remove(index);
@@ -574,7 +648,12 @@ impl TouchControls {
             if button == TouchButton::DPad {
                 self.draw_dpad(geometry, layout, highlight == Some(button), art, ctx)?;
             } else {
-                let held = highlight == Some(button) || self.find_point_in(geometry.rect(layout, button)).is_some();
+                let held = highlight == Some(button)
+                    || self.points.iter().any(|p| {
+                        geometry.dpad_anchor(layout, p).filter(|_| layout.floating_stick).is_none()
+                            && geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, !in_game || self.has_map)
+                                == Some(button)
+                    });
                 self.draw_button(geometry, layout, button, button.icon(), button.text_key(), held, art, ctx)?;
             }
         }
@@ -706,23 +785,39 @@ impl TouchControls {
         art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
-        let rect = geometry.rect(layout, TouchButton::DPad);
-        let (x, y, side) = (rect.left as f32, rect.top as f32, rect.width() as f32);
+        // The touch steering the pad, if any, with the centre it steers around. A fixed pad follows only
+        // touches that started on it; others still press directions but don't move the knob.
+        let steering = self.points.iter().find_map(|point| {
+            let (ax, ay, _) = geometry.dpad_anchor(layout, point)?;
+            let dirs = geometry.dpad_directions(layout, point)?;
+            (layout.floating_stick || point.first_position_in(geometry.rect(layout, TouchButton::DPad)))
+                .then_some((point, (ax, ay), dirs))
+        });
+
+        // The floating stick sits under the thumb while steering, and shows faded at its usual spot otherwise.
+        let (cx, cy) = match steering {
+            Some((_, (ax, ay), _)) if layout.floating_stick => geometry.clamp(TouchButton::DPad, ax, ay),
+            _ => geometry.center(layout, TouchButton::DPad),
+        };
+        let faded;
+        let layout = if layout.floating_stick && steering.is_none() {
+            faded = TouchLayout { opacity: layout.opacity * 0.5, ..layout.clone() };
+            &faded
+        } else {
+            layout
+        };
+
+        let side = geometry.rect(layout, TouchButton::DPad).width() as f32;
+        let (x, y) = (cx - side / 2.0, cy - side / 2.0);
         let cell = side / 3.0;
 
         Self::draw_plate(layout, x, y, side, true, highlight, art, ctx)?;
 
-        // The touch steering the pad, if any.
-        let steering = self.points.iter().find_map(|point| {
-            geometry.dpad_directions(layout, point).filter(|_| point.first_position_in(rect)).map(|dirs| (point, dirs))
-        });
-
         if layout.dpad_style == TouchDpadStyle::Stick {
             // A knob that follows the thumb, kept inside the pad.
             let knob = side * 0.42;
-            let (cx, cy) = geometry.center(layout, TouchButton::DPad);
             let (mut dx, mut dy) = steering
-                .map(|(p, _)| (p.position.0 as f32 - cx, p.position.1 as f32 - cy))
+                .map(|(p, (ax, ay), _)| (p.position.0 as f32 - ax, p.position.1 as f32 - ay))
                 .unwrap_or((0.0, 0.0));
             let reach = (side - knob) / 2.0;
             let distance = (dx * dx + dy * dy).sqrt();
@@ -740,7 +835,7 @@ impl TouchControls {
             return Ok(());
         }
 
-        let (left, up, right, down) = steering.map(|(_, dirs)| dirs).unwrap_or((false, false, false, false));
+        let (left, up, right, down) = steering.map(|(_, _, dirs)| dirs).unwrap_or((false, false, false, false));
         let held_cell = |x: u16, y: u16| {
             let required = (x != 0 || left) && (x != 2 || right) && (y != 0 || up) && (y != 2 || down);
             let exact = (x != 1 || !(left || right)) && (y != 1 || !(up || down));

@@ -234,6 +234,8 @@
           "stick": "スティック"
         },
         "weapon_buttons": "ぶきボタン：",
+        "floating_stick": "うごくスティック：",
+        "forgiving_buttons": "ひろいボタン判定：",
         "vibration": "しんどう：",
         "map_button": "マップボタン：",
         "button_taps": "ボタンのしんどう：",

@@ -86,11 +86,12 @@ impl PlayerController for TouchPlayerController {
 
                 // Fast-forward is drawn where Inventory is.
                 self.state.set_inventory(
-                    state.touch_controls.point_in(geometry.rect(layout, TouchButton::Inventory)).is_some(),
+                    state.touch_controls.point_in(geometry.hit_rect(layout, TouchButton::Inventory)).is_some(),
                 );
             }
             TouchControlType::Controls => {
                 self.state.0 = 0;
+                let has_map = state.touch_controls.has_map;
 
                 for point in &state.touch_controls.points {
                     if let Some((left, up, right, down)) = geometry.dpad_directions(layout, point) {
@@ -98,28 +99,29 @@ impl PlayerController for TouchPlayerController {
                         self.state.set_up(self.state.up() || up);
                         self.state.set_right(self.state.right() || right);
                         self.state.set_down(self.state.down() || down);
+
+                        // A thumb that went down on the pad (or the floating stick) only steers, even when
+                        // it slides into a nearby button's touch area.
+                        if layout.floating_stick || point.first_position_in(geometry.rect(layout, TouchButton::DPad)) {
+                            continue;
+                        }
                     }
 
-                    self.state.set_jump(self.state.jump() || point.is_in(geometry.rect(layout, TouchButton::Jump)));
-                    self.state.set_shoot(self.state.shoot() || point.is_in(geometry.rect(layout, TouchButton::Shoot)));
-                    self.state.set_pause(self.state.pause() || point.is_in(geometry.rect(layout, TouchButton::Pause)));
-
-                    if layout.weapon_buttons {
-                        self.state.set_prev_weapon(
-                            self.state.prev_weapon() || point.is_in(geometry.rect(layout, TouchButton::PrevWeapon)),
-                        );
-                        self.state.set_next_weapon(
-                            self.state.next_weapon() || point.is_in(geometry.rect(layout, TouchButton::NextWeapon)),
-                        );
-                    }
-
-                    if layout.map_button && state.touch_controls.has_map {
-                        self.state.set_map(self.state.map() || point.is_in(geometry.rect(layout, TouchButton::Map)));
+                    match geometry.button_at(layout, point.position.0 as f32, point.position.1 as f32, has_map) {
+                        Some(TouchButton::Jump) => self.state.set_jump(true),
+                        Some(TouchButton::Shoot) => self.state.set_shoot(true),
+                        Some(TouchButton::Pause) => self.state.set_pause(true),
+                        Some(TouchButton::PrevWeapon) => self.state.set_prev_weapon(true),
+                        Some(TouchButton::NextWeapon) => self.state.set_next_weapon(true),
+                        Some(TouchButton::Map) => self.state.set_map(true),
+                        _ => {}
                     }
                 }
 
-                let inventory = geometry.rect(layout, TouchButton::Inventory);
-                self.state.set_inventory(state.touch_controls.consume_click_in(inventory));
+                self.state.set_inventory(state.touch_controls.consume_click_where(|p| {
+                    geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, has_map)
+                        == Some(TouchButton::Inventory)
+                }));
 
                 // A tick for each new press, and when the d-pad changes direction.
                 const DIRECTIONS: u16 = 0b1111;

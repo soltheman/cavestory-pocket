@@ -84,6 +84,8 @@ enum TouchMenuEntry {
     Color,
     Shape,
     Dpad,
+    FloatingStick,
+    ForgivingButtons,
     WeaponButtons,
     MapButton,
     Vibration,
@@ -358,6 +360,20 @@ impl ControlsMenu {
         self.touch.push_entry(
             TouchMenuEntry::Dpad,
             option("dpad", layout.dpad_style.index(), TouchDpadStyle::ALL.iter().map(|v| v.key()).collect()),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::FloatingStick,
+            MenuEntry::Toggle(
+                state.loc.t("menus.controls_menu.touch_menu.floating_stick").to_owned(),
+                layout.floating_stick,
+            ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::ForgivingButtons,
+            MenuEntry::Toggle(
+                state.loc.t("menus.controls_menu.touch_menu.forgiving_buttons").to_owned(),
+                layout.forgiving_buttons,
+            ),
         );
         self.touch.push_entry(
             TouchMenuEntry::WeaponButtons,
@@ -1444,6 +1460,22 @@ impl ControlsMenu {
                     if let MenuEntry::Toggle(_, value) = toggle {
                         state.settings.touch_layout.weapon_buttons = !state.settings.touch_layout.weapon_buttons;
                         *value = state.settings.touch_layout.weapon_buttons;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::FloatingStick, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.floating_stick = !layout.floating_stick;
+                        *value = layout.floating_stick;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::ForgivingButtons, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.forgiving_buttons = !layout.forgiving_buttons;
+                        *value = layout.forgiving_buttons;
                         let _ = state.settings.save(ctx);
                     }
                 }
