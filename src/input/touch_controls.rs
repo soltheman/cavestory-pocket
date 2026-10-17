@@ -657,7 +657,8 @@ impl TouchControls {
     }
 
     /// Draws every visible control. `highlight` marks one as held, for the layout editor. `in_game` leaves
-    /// out the Map button until the Map System is owned (menus show it so it can be placed early).
+    /// out the Map button until the Map System is owned (menus show it so it can be placed early) and
+    /// shows touches on the buttons; the menu previews stay at rest while their entries are tapped.
     pub fn draw_buttons(
         &self,
         geometry: &TouchGeometry,
@@ -673,13 +674,13 @@ impl TouchControls {
             }
 
             if button == TouchButton::DPad {
-                self.draw_dpad(geometry, layout, highlight == Some(button), art, ctx)?;
+                self.draw_dpad(geometry, layout, highlight == Some(button), in_game, art, ctx)?;
             } else {
                 let held = highlight == Some(button)
                     || (button == TouchButton::Strafe && self.strafe_locked)
-                    || self.points.iter().any(|p| {
+                    || in_game && self.points.iter().any(|p| {
                         geometry.dpad_anchor(layout, p).filter(|_| layout.floating_stick).is_none()
-                            && geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, !in_game || self.has_map)
+                            && geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, self.has_map)
                                 == Some(button)
                     });
                 self.draw_button(geometry, layout, button, button.icon(), button.text_key(), held, art, ctx)?;
@@ -811,12 +812,13 @@ impl TouchControls {
         geometry: &TouchGeometry,
         layout: &TouchLayout,
         highlight: bool,
+        in_game: bool,
         art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
         // The touch steering the pad, if any, with the centre it steers around. A fixed pad follows only
         // touches that started on it; others still press directions but don't move the knob.
-        let steering = self.points.iter().find_map(|point| {
+        let steering = self.points.iter().filter(|_| in_game).find_map(|point| {
             let (ax, ay, _) = geometry.dpad_anchor(layout, point)?;
             let dirs = geometry.dpad_directions(layout, point)?;
             (layout.floating_stick || point.first_position_in(geometry.rect(layout, TouchButton::DPad)))
