@@ -51,6 +51,8 @@ pub enum MenuEntry {
 /// Set while touch controls are on: one-line entries get taller so they are easier to tap.
 static TOUCH_ROWS: AtomicBool = AtomicBool::new(false);
 const TOUCH_ROW_PADDING: f64 = 6.0;
+/// Width of the tap zones for the "<" and ">" beside an option, in canvas pixels.
+const TOUCH_ARROW_ZONE: isize = 40;
 
 /// Called once the settings are loaded, before any menu measures itself.
 pub fn set_touch_rows(enabled: bool) {
@@ -932,10 +934,10 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                 None => entry.height(),
             } as isize;
             let entry_bounds = Rect::new_size(self.x, y as isize, self.width as isize, entry_height);
+            // The "<" and ">" beside an entry, not everything to its sides (that held the touch button preview).
             let right_entry_bounds =
-                Rect::new_size(self.x + self.width as isize, y as isize, self.width as isize, entry_height);
-            let left_entry_bounds =
-                Rect::new_size(self.x - self.width as isize, y as isize, self.width as isize, entry_height);
+                Rect::new_size(self.x + self.width as isize, y as isize, TOUCH_ARROW_ZONE, entry_height);
+            let left_entry_bounds = Rect::new_size(self.x - TOUCH_ARROW_ZONE, y as isize, TOUCH_ARROW_ZONE, entry_height);
             y += entry_height as f32;
 
             match entry {
@@ -1038,8 +1040,14 @@ impl<T: std::cmp::PartialEq + std::default::Default + Clone> Menu<T> {
                     }
                 }
                 _ => {
-                    let base_y = (self.y as f32).max(MENU_MIN_PADDING);
-                    self.touch_drag = Some((point.touch_id, point.position.1, base_y - self.compute_y(state, None)));
+                    // Only swipes that start on the menu scroll it, not ones on whatever is beside it.
+                    let start_x = point.first_position.0;
+                    let left = (self.x - TOUCH_ARROW_ZONE) as f64;
+                    let right = (self.x + self.width as isize + TOUCH_ARROW_ZONE) as f64;
+                    if start_x >= left && start_x <= right {
+                        let base_y = (self.y as f32).max(MENU_MIN_PADDING);
+                        self.touch_drag = Some((point.touch_id, point.position.1, base_y - self.compute_y(state, None)));
+                    }
                 }
             },
             _ => self.touch_drag = None,
