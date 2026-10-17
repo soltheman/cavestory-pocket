@@ -40,6 +40,10 @@ enum CurrentMenu {
     ConfirmRebindMenu,
     ConfirmResetMenu,
     TouchMenu,
+    TouchLookMenu,
+    TouchLayoutMenu,
+    TouchShootingMenu,
+    TouchVibrationMenu,
     TouchLayoutEditor,
 }
 
@@ -78,6 +82,10 @@ fn set_touch_look(layout: &mut TouchLayout, entry: TouchMenuEntry, index: usize)
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 enum TouchMenuEntry {
     Show,
+    LookMenu,
+    LayoutMenu,
+    ShootingMenu,
+    VibrationMenu,
     Opacity,
     Size,
     Icons,
@@ -86,6 +94,7 @@ enum TouchMenuEntry {
     Dpad,
     FloatingStick,
     ForgivingButtons,
+    AutoFire,
     LockFacingOnShoot,
     WeaponButtons,
     MapButton,
@@ -225,7 +234,12 @@ pub struct ControlsMenu {
     rebind: Menu<RebindMenuEntry>,
     confirm_rebind: Menu<usize>,
     confirm_reset: Menu<ConfirmResetMenuEntry>,
+    /// Touch controls: Show buttons and the sub-menus below.
     touch: Menu<TouchMenuEntry>,
+    touch_look: Menu<TouchMenuEntry>,
+    touch_layout: Menu<TouchMenuEntry>,
+    touch_shooting: Menu<TouchMenuEntry>,
+    touch_vibration: Menu<TouchMenuEntry>,
     touch_editor: TouchLayoutEditor,
 
     selected_player: Player,
@@ -258,6 +272,10 @@ impl ControlsMenu {
             confirm_rebind,
             confirm_reset,
             touch: Menu::new(0, 0, 220, 0),
+            touch_look: Menu::new(0, 0, 220, 0),
+            touch_layout: Menu::new(0, 0, 220, 0),
+            touch_shooting: Menu::new(0, 0, 220, 0),
+            touch_vibration: Menu::new(0, 0, 220, 0),
             touch_editor: TouchLayoutEditor::new(),
 
             selected_player: Player::Player1,
@@ -306,6 +324,12 @@ impl ControlsMenu {
         self.main.push_entry(MainMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
 
         let layout = &state.settings.touch_layout;
+        let toggle = |key: &str, value: bool| {
+            MenuEntry::Toggle(state.loc.t(&format!("menus.controls_menu.touch_menu.{}", key)).to_owned(), value)
+        };
+        let active = |key: &str| MenuEntry::Active(state.loc.t(&format!("menus.controls_menu.touch_menu.{}", key)).to_owned());
+
+        // Touch controls: whether the buttons show, then a short sub-menu per topic.
         self.touch.push_entry(
             TouchMenuEntry::Show,
             MenuEntry::Toggle(
@@ -313,7 +337,13 @@ impl ControlsMenu {
                 state.settings.display_touch_controls,
             ),
         );
-        self.touch.push_entry(
+        self.touch.push_entry(TouchMenuEntry::LookMenu, active("look_menu"));
+        self.touch.push_entry(TouchMenuEntry::LayoutMenu, active("layout_menu"));
+        self.touch.push_entry(TouchMenuEntry::ShootingMenu, active("shooting_menu"));
+        self.touch.push_entry(TouchMenuEntry::VibrationMenu, active("vibration_menu"));
+
+        // Look: how the buttons are drawn.
+        self.touch_look.push_entry(
             TouchMenuEntry::Opacity,
             MenuEntry::Options(
                 state.loc.t("menus.controls_menu.touch_menu.opacity.entry").to_owned(),
@@ -325,7 +355,7 @@ impl ControlsMenu {
                     .collect(),
             ),
         );
-        self.touch.push_entry(
+        self.touch_look.push_entry(
             TouchMenuEntry::Size,
             MenuEntry::Options(
                 state.loc.t("menus.controls_menu.touch_menu.size.entry").to_owned(),
@@ -347,78 +377,51 @@ impl ControlsMenu {
                     .collect(),
             )
         };
-        self.touch.push_entry(
+        self.touch_look.push_entry(
             TouchMenuEntry::Icons,
             option("icons", layout.icon_style.index(), TouchIconStyle::ALL.iter().map(|v| v.key()).collect()),
         );
-        self.touch.push_entry(
+        self.touch_look.push_entry(
             TouchMenuEntry::Color,
             option("color", layout.color.index(), TouchColor::ALL.iter().map(|v| v.key()).collect()),
         );
-        self.touch.push_entry(
+        self.touch_look.push_entry(
             TouchMenuEntry::Shape,
             option("shape", layout.shape.index(), TouchShape::ALL.iter().map(|v| v.key()).collect()),
         );
-        self.touch.push_entry(
+        self.touch_look.push_entry(
             TouchMenuEntry::Dpad,
             option("dpad", layout.dpad_style.index(), TouchDpadStyle::ALL.iter().map(|v| v.key()).collect()),
         );
-        self.touch.push_entry(
-            TouchMenuEntry::FloatingStick,
-            MenuEntry::Toggle(
-                state.loc.t("menus.controls_menu.touch_menu.floating_stick").to_owned(),
-                layout.floating_stick,
-            ),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::ForgivingButtons,
-            MenuEntry::Toggle(
-                state.loc.t("menus.controls_menu.touch_menu.forgiving_buttons").to_owned(),
-                layout.forgiving_buttons,
-            ),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::LockFacingOnShoot,
-            MenuEntry::Toggle(
-                state.loc.t("menus.controls_menu.touch_menu.lock_facing_on_shoot").to_owned(),
-                layout.lock_facing_on_shoot,
-            ),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::WeaponButtons,
-            MenuEntry::Toggle(
-                state.loc.t("menus.controls_menu.touch_menu.weapon_buttons").to_owned(),
-                layout.weapon_buttons,
-            ),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::MapButton,
-            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.map_button").to_owned(), layout.map_button),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::StrafeButton,
-            MenuEntry::Toggle(
-                state.loc.t("menus.controls_menu.touch_menu.strafe_button").to_owned(),
-                layout.strafe_button,
-            ),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::Vibration,
-            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.vibration").to_owned(), layout.vibration),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::ButtonTaps,
-            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.button_taps").to_owned(), layout.button_taps),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::Move,
-            MenuEntry::Active(state.loc.t("menus.controls_menu.touch_menu.move").to_owned()),
-        );
-        self.touch.push_entry(
-            TouchMenuEntry::Reset,
-            MenuEntry::Active(state.loc.t("menus.controls_menu.touch_menu.reset").to_owned()),
-        );
-        self.touch.push_entry(TouchMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
+
+        // Layout: where the buttons are, which ones show, and how touches find them.
+        self.touch_layout.push_entry(TouchMenuEntry::Move, active("move"));
+        self.touch_layout.push_entry(TouchMenuEntry::Reset, active("reset"));
+        self.touch_layout.push_entry(TouchMenuEntry::FloatingStick, toggle("floating_stick", layout.floating_stick));
+        self.touch_layout
+            .push_entry(TouchMenuEntry::ForgivingButtons, toggle("forgiving_buttons", layout.forgiving_buttons));
+        self.touch_layout.push_entry(TouchMenuEntry::WeaponButtons, toggle("weapon_buttons", layout.weapon_buttons));
+        self.touch_layout.push_entry(TouchMenuEntry::MapButton, toggle("map_button", layout.map_button));
+
+        // Shooting: auto-fire and the two ways to strafe.
+        self.touch_shooting.push_entry(TouchMenuEntry::AutoFire, toggle("auto_fire", layout.auto_fire));
+        self.touch_shooting
+            .push_entry(TouchMenuEntry::LockFacingOnShoot, toggle("lock_facing_on_shoot", layout.lock_facing_on_shoot));
+        self.touch_shooting.push_entry(TouchMenuEntry::StrafeButton, toggle("strafe_button", layout.strafe_button));
+
+        // Vibration: haptics when hurt or in quakes, and on button presses.
+        self.touch_vibration.push_entry(TouchMenuEntry::Vibration, toggle("vibration", layout.vibration));
+        self.touch_vibration.push_entry(TouchMenuEntry::ButtonTaps, toggle("button_taps", layout.button_taps));
+
+        for menu in [
+            &mut self.touch,
+            &mut self.touch_look,
+            &mut self.touch_layout,
+            &mut self.touch_shooting,
+            &mut self.touch_vibration,
+        ] {
+            menu.push_entry(TouchMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
+        }
 
         self.confirm_reset.push_entry(
             ConfirmResetMenuEntry::Title,
@@ -502,6 +505,27 @@ impl ControlsMenu {
         );
     }
 
+    /// The touch controls menu or sub-menu that is open.
+    fn touch_menu(&self) -> &Menu<TouchMenuEntry> {
+        match self.current {
+            CurrentMenu::TouchLookMenu => &self.touch_look,
+            CurrentMenu::TouchLayoutMenu => &self.touch_layout,
+            CurrentMenu::TouchShootingMenu => &self.touch_shooting,
+            CurrentMenu::TouchVibrationMenu => &self.touch_vibration,
+            _ => &self.touch,
+        }
+    }
+
+    fn touch_menu_mut(&mut self) -> &mut Menu<TouchMenuEntry> {
+        match self.current {
+            CurrentMenu::TouchLookMenu => &mut self.touch_look,
+            CurrentMenu::TouchLayoutMenu => &mut self.touch_layout,
+            CurrentMenu::TouchShootingMenu => &mut self.touch_shooting,
+            CurrentMenu::TouchVibrationMenu => &mut self.touch_vibration,
+            _ => &mut self.touch,
+        }
+    }
+
     fn update_sizes(&mut self, state: &SharedGameState) {
         self.main.update_width(state);
         self.main.update_height(state);
@@ -529,10 +553,18 @@ impl ControlsMenu {
         self.confirm_reset.x = ((state.canvas_size.0 - self.confirm_reset.width as f32) / 2.0).floor() as isize;
         self.confirm_reset.y = ((state.canvas_size.1 - self.confirm_reset.height as f32) / 2.0).floor() as isize;
 
-        self.touch.update_width(state);
-        self.touch.update_height(state);
-        self.touch.x = ((state.canvas_size.0 - self.touch.width as f32) / 2.0).floor() as isize;
-        self.touch.y = ((state.canvas_size.1 - self.touch.height as f32) / 2.0).floor() as isize;
+        for menu in [
+            &mut self.touch,
+            &mut self.touch_look,
+            &mut self.touch_layout,
+            &mut self.touch_shooting,
+            &mut self.touch_vibration,
+        ] {
+            menu.update_width(state);
+            menu.update_height(state);
+            menu.x = ((state.canvas_size.0 - menu.width as f32) / 2.0).floor() as isize;
+            menu.y = ((state.canvas_size.1 - menu.height as f32) / 2.0).floor() as isize;
+        }
     }
 
     fn init_key_map(&self, settings_key_map: &PlayerKeyMap) -> Vec<(ControlEntry, ScanCode)> {
@@ -1425,7 +1457,29 @@ impl ControlsMenu {
                 }
                 _ => {}
             },
-            CurrentMenu::TouchMenu => match self.touch.tick(controller, state) {
+            CurrentMenu::TouchMenu
+            | CurrentMenu::TouchLookMenu
+            | CurrentMenu::TouchLayoutMenu
+            | CurrentMenu::TouchShootingMenu
+            | CurrentMenu::TouchVibrationMenu => match self.touch_menu_mut().tick(controller, state) {
+                MenuSelectionResult::Selected(TouchMenuEntry::LookMenu, _) => self.current = CurrentMenu::TouchLookMenu,
+                MenuSelectionResult::Selected(TouchMenuEntry::LayoutMenu, _) => {
+                    self.current = CurrentMenu::TouchLayoutMenu
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::ShootingMenu, _) => {
+                    self.current = CurrentMenu::TouchShootingMenu
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::VibrationMenu, _) => {
+                    self.current = CurrentMenu::TouchVibrationMenu
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::AutoFire, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.auto_fire = !layout.auto_fire;
+                        *value = layout.auto_fire;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
                 MenuSelectionResult::Selected(TouchMenuEntry::Show, toggle) => {
                     if let MenuEntry::Toggle(_, value) = toggle {
                         state.settings.display_touch_controls = !state.settings.display_touch_controls;
@@ -1555,13 +1609,18 @@ impl ControlsMenu {
                     let _ = state.settings.save(ctx);
                 }
                 MenuSelectionResult::Selected(TouchMenuEntry::Back, _) | MenuSelectionResult::Canceled => {
-                    self.current = CurrentMenu::MainMenu;
+                    // A sub-menu goes back to Touch controls, and that one back to Controls.
+                    self.current = if self.current == CurrentMenu::TouchMenu {
+                        CurrentMenu::MainMenu
+                    } else {
+                        CurrentMenu::TouchMenu
+                    };
                 }
                 _ => {}
             },
             CurrentMenu::TouchLayoutEditor => {
                 if self.touch_editor.tick(controller, state, ctx)? {
-                    self.current = CurrentMenu::TouchMenu;
+                    self.current = CurrentMenu::TouchLayoutMenu;
                 }
             }
         }
@@ -1596,7 +1655,11 @@ impl ControlsMenu {
             CurrentMenu::RebindMenu => self.rebind.draw(state, ctx)?,
             CurrentMenu::ConfirmRebindMenu => self.confirm_rebind.draw(state, ctx)?,
             CurrentMenu::ConfirmResetMenu => self.confirm_reset.draw(state, ctx)?,
-            CurrentMenu::TouchMenu => {
+            CurrentMenu::TouchMenu
+            | CurrentMenu::TouchLookMenu
+            | CurrentMenu::TouchLayoutMenu
+            | CurrentMenu::TouchShootingMenu
+            | CurrentMenu::TouchVibrationMenu => {
                 // Show the buttons behind the menu, so opacity and size changes are visible right away.
                 if state.settings.display_touch_controls {
                     let geometry =
@@ -1615,7 +1678,7 @@ impl ControlsMenu {
                         ctx,
                     )?;
                 }
-                self.touch.draw(state, ctx)?
+                self.touch_menu().draw(state, ctx)?
             }
             CurrentMenu::TouchLayoutEditor => self.touch_editor.draw(state, ctx)?,
         }
