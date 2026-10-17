@@ -1063,6 +1063,7 @@ impl Scene for GameScene {
 
         if state.settings.touch_controls {
             state.touch_controls.interact_icon = false;
+            state.touch_controls.has_map = self.player1.equip.has_map();
         }
 
         if self.intro_mode {

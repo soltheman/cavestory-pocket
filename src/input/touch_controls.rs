@@ -438,6 +438,8 @@ pub struct TouchControls {
     pub control_type: TouchControlType,
     pub points: Vec<TouchPoint>,
     pub interact_icon: bool,
+    /// Whether the player owns the Map System; the Map button only shows in game once they do.
+    pub has_map: bool,
     pub touch_id_counter: u64,
     /// Touches that just went down; gameplay reacts on press.
     pub clicks: Vec<TouchPoint>,
@@ -451,6 +453,7 @@ impl TouchControls {
             control_type: TouchControlType::None,
             points: Vec::with_capacity(8),
             interact_icon: false,
+            has_map: false,
             touch_id_counter: 0,
             clicks: Vec::with_capacity(8),
             taps: Vec::with_capacity(8),
@@ -548,20 +551,26 @@ impl TouchControls {
                 art,
                 ctx,
             ),
-            TouchControlType::Controls => self.draw_buttons(&geometry, layout, None, art, ctx),
+            TouchControlType::Controls => self.draw_buttons(&geometry, layout, None, true, art, ctx),
         }
     }
 
-    /// Draws every visible control. `highlight` marks one as held, for the layout editor.
+    /// Draws every visible control. `highlight` marks one as held, for the layout editor. `in_game` leaves
+    /// out the Map button until the Map System is owned (menus show it so it can be placed early).
     pub fn draw_buttons(
         &self,
         geometry: &TouchGeometry,
         layout: &TouchLayout,
         highlight: Option<TouchButton>,
+        in_game: bool,
         art: &mut TouchArt,
         ctx: &mut Context,
     ) -> GameResult {
         for button in layout.visible_buttons() {
+            if in_game && button == TouchButton::Map && !self.has_map {
+                continue;
+            }
+
             if button == TouchButton::DPad {
                 self.draw_dpad(geometry, layout, highlight == Some(button), art, ctx)?;
             } else {

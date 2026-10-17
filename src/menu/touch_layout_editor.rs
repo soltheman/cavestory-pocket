@@ -121,6 +121,7 @@ impl TouchLayoutEditor {
             &geometry,
             &state.settings.touch_layout,
             highlight,
+            false,
             &mut TouchArt {
                 constants: &state.constants,
                 texture_set: &mut state.texture_set,

@@ -113,7 +113,7 @@ impl PlayerController for TouchPlayerController {
                         );
                     }
 
-                    if layout.map_button {
+                    if layout.map_button && state.touch_controls.has_map {
                         self.state.set_map(self.state.map() || point.is_in(geometry.rect(layout, TouchButton::Map)));
                     }
                 }
