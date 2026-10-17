@@ -442,6 +442,14 @@ impl Settings {
                 combined_player_controller.add(touch_player_controller);
                 combined_player_controller.add(keyboard_controller);
 
+                // With touch controls, the first game controller works too without picking it in the
+                // menu (unless player 2 has it). The touch buttons hide while one is connected.
+                if self.player2_controller_type != ControllerType::Gamepad(0) {
+                    let mut gamepad_controller = Box::new(GamepadController::new(0, TargetPlayer::Player1));
+                    gamepad_controller.set_rumble_enabled(self.player1_rumble);
+                    combined_player_controller.add(gamepad_controller);
+                }
+
                 Box::new(combined_player_controller)
             },
             ControllerType::Gamepad(index) => {

@@ -1183,7 +1183,7 @@ impl Scene for GameScene {
 
         if state.quake_rumble_counter > 0 {
             gamepad::set_quake_rumble_all(ctx, state, state.quake_rumble_counter)?;
-            if state.settings.touch_controls {
+            if state.settings.touch_controls && ctx.gamepad_context.get_gamepads().is_empty() {
                 crate::framework::haptics::quake(0x3000, state.quake_rumble_counter);
             }
             state.quake_rumble_counter = 0;
@@ -1191,7 +1191,7 @@ impl Scene for GameScene {
 
         if state.super_quake_rumble_counter > 0 {
             gamepad::set_super_quake_rumble_all(ctx, state, state.super_quake_rumble_counter)?;
-            if state.settings.touch_controls {
+            if state.settings.touch_controls && ctx.gamepad_context.get_gamepads().is_empty() {
                 crate::framework::haptics::quake(0x5000, state.super_quake_rumble_counter);
             }
             state.super_quake_rumble_counter = 0;
@@ -1472,23 +1472,28 @@ impl Scene for GameScene {
         if (self.skip_counter > 1 || state.tutorial_counter > 0)
             && (state.settings.cutscene_skip_mode != CutsceneSkipMode::Auto)
         {
-            let key = {
-                if state.settings.touch_controls {
-                    ">>".to_owned()
-                } else {
-                    match state.settings.player1_controller_type {
-                        ControllerType::Keyboard => format!("{:?}", state.settings.player1_key_map.skip),
-                        ControllerType::Gamepad(_) => "=".to_owned(),
-                    }
-                }
+            // With touch controls, a connected controller is used automatically as the first one, and
+            // the on-screen buttons hide while it is.
+            let pad_connected = !ctx.gamepad_context.get_gamepads().is_empty();
+            let touch_buttons = state.settings.touch_controls && !pad_connected;
+            let pad = match state.settings.player1_controller_type {
+                ControllerType::Gamepad(index) => Some(index),
+                ControllerType::Keyboard if state.settings.touch_controls && pad_connected => Some(0),
+                ControllerType::Keyboard => None,
+            };
+
+            let key = if touch_buttons {
+                ">>".to_owned()
+            } else if pad.is_some() {
+                "=".to_owned()
+            } else {
+                format!("{:?}", state.settings.player1_key_map.skip)
             };
 
             let text = state.tt("game.cutscene_skip", &[("key", key.as_str())]);
 
-            let gamepad_sprite_offset = match state.settings.player1_controller_type {
-                ControllerType::Keyboard => 1,
-                ControllerType::Gamepad(index) => ctx.gamepad_context.get_gamepad_sprite_offset(index as usize),
-            };
+            let gamepad_sprite_offset =
+                pad.map(|index| ctx.gamepad_context.get_gamepad_sprite_offset(index as usize)).unwrap_or(1);
 
             let symbols = Symbols {
                 symbols: &[(
@@ -1501,7 +1506,7 @@ impl Scene for GameScene {
             // let width = state.font.text_width_with_rects(text.chars(), &rect_map, &state.constants);
             let width = state.font.builder().with_symbols(Some(symbols)).compute_width(&text);
             let line_height = state.font.line_height();
-            let (pos_x, pos_y) = if state.settings.touch_controls {
+            let (pos_x, pos_y) = if touch_buttons {
                 // Beside the on-screen skip button instead of underneath it.
                 let layout = &state.settings.touch_layout;
                 let button = TouchGeometry::new(ctx, state.canvas_size, state.scale, layout)

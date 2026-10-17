@@ -155,6 +155,21 @@ impl Player {
             Player::Player2 => state.settings.player2_controller_type,
         }
     }
+
+    /// The controller the player actually plays with: with touch controls, player 1's touch screen
+    /// setting also picks up the first game controller (see `Settings::create_player1_controller`).
+    fn effective_controller_type(self, state: &SharedGameState, ctx: &Context) -> ControllerType {
+        match (self, self.controller_type(state)) {
+            (Player::Player1, ControllerType::Keyboard)
+                if state.settings.touch_controls
+                    && !ctx.gamepad_context.get_gamepads().is_empty()
+                    && state.settings.player2_controller_type != ControllerType::Gamepad(0) =>
+            {
+                ControllerType::Gamepad(0)
+            }
+            (_, controller) => controller,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
@@ -217,6 +232,8 @@ pub struct ControlsMenu {
     player2_controller_button_map: Vec<(ControlEntry, PlayerControllerInputType)>,
 
     input_busy: bool,
+    /// With touch controls: whether the controller entries were last shown (a controller connected).
+    controllers_shown: Option<bool>,
 }
 
 impl ControlsMenu {
@@ -247,6 +264,7 @@ impl ControlsMenu {
             player2_controller_button_map: Vec::new(),
 
             input_busy: false,
+            controllers_shown: None,
         }
     }
 
@@ -381,9 +399,65 @@ impl ControlsMenu {
 
         self.update_controller_options(state, ctx);
         self.update_rebind_menu(state, ctx);
+        self.controllers_shown = None;
+        self.update_touch_entries(state, ctx);
         self.update_sizes(state);
 
         Ok(())
+    }
+
+    /// With touch controls there are no keyboard settings: player selection and the controller list
+    /// show only while a game controller is connected, and rebinding only for a controller.
+    fn update_touch_entries(&mut self, state: &SharedGameState, ctx: &Context) {
+        if !state.settings.touch_controls {
+            return;
+        }
+
+        let connected = !ctx.gamepad_context.get_gamepads().is_empty();
+        if self.controllers_shown != Some(connected) {
+            self.controllers_shown = Some(connected);
+
+            if !connected && self.selected_player == Player::Player2 {
+                self.selected_player = Player::Player1;
+            }
+            self.update_controller_options(state, ctx);
+            self.update_rebind_menu(state, ctx);
+
+            if state.constants.supports_two_player {
+                self.main.set_entry(
+                    MainMenuEntry::SelectedPlayer,
+                    if connected {
+                        MenuEntry::Options(
+                            state.loc.t("menus.controls_menu.select_player.entry").to_owned(),
+                            self.selected_player as usize,
+                            vec![
+                                state.loc.t("menus.controls_menu.select_player.player_1").to_owned(),
+                                state.loc.t("menus.controls_menu.select_player.player_2").to_owned(),
+                            ],
+                        )
+                    } else {
+                        MenuEntry::Hidden
+                    },
+                );
+            }
+            self.main.set_entry(
+                MainMenuEntry::Controller,
+                if connected {
+                    MenuEntry::Active(state.loc.t("menus.controls_menu.controller.entry").to_owned())
+                } else {
+                    MenuEntry::Hidden
+                },
+            );
+        }
+
+        self.main.set_entry(
+            MainMenuEntry::Rebind,
+            if matches!(self.selected_controller, ControllerType::Gamepad(_)) {
+                MenuEntry::Active(state.loc.t("menus.controls_menu.rebind").to_owned())
+            } else {
+                MenuEntry::Hidden
+            },
+        );
     }
 
     fn update_sizes(&mut self, state: &SharedGameState) {
@@ -481,7 +555,7 @@ impl ControlsMenu {
                     }
                 } else {
                     for (k, v) in self.player1_controller_button_map.iter() {
-                        let gamepad_sprite_offset = match state.settings.player1_controller_type {
+                        let gamepad_sprite_offset = match Player::Player1.effective_controller_type(state, ctx) {
                             ControllerType::Keyboard => 1,
                             ControllerType::Gamepad(index) => {
                                 ctx.gamepad_context.get_gamepad_sprite_offset(index as usize)
@@ -577,10 +651,7 @@ impl ControlsMenu {
         self.select_controller
             .push_entry(SelectControllerMenuEntry::Back, MenuEntry::Active(state.loc.t("common.back").to_owned()));
 
-        let controller_type = match self.selected_player {
-            Player::Player1 => state.settings.player1_controller_type,
-            Player::Player2 => state.settings.player2_controller_type,
-        };
+        let controller_type = self.selected_player.effective_controller_type(state, ctx);
 
         let rumble = match self.selected_player {
             Player::Player1 => state.settings.player1_rumble,
@@ -1037,6 +1108,7 @@ impl ControlsMenu {
         state: &mut SharedGameState,
         ctx: &mut Context,
     ) -> GameResult {
+        self.update_touch_entries(state, ctx);
         self.update_sizes(state);
 
         match self.current {
@@ -1054,7 +1126,7 @@ impl ControlsMenu {
                         *value = new_value;
 
                         self.selected_player = new_player;
-                        self.selected_controller = new_player.controller_type(state);
+                        self.selected_controller = new_player.effective_controller_type(state, ctx);
 
                         self.update_controller_options(state, ctx);
                         self.update_rebind_menu(state, ctx);
@@ -1251,7 +1323,7 @@ impl ControlsMenu {
 
                                     let button = *pressed_gamepad_buttons.first().unwrap();
 
-                                    if self.selected_player.controller_type(state) != self.selected_controller {
+                                    if self.selected_player.effective_controller_type(state, ctx) != self.selected_controller {
                                         state.sound_manager.play_sfx(12);
                                     } else {
                                         let normalized_input = self
@@ -1273,7 +1345,7 @@ impl ControlsMenu {
                                     self.input_busy = true;
                                     self.rebind.non_interactive = true;
 
-                                    if self.selected_player.controller_type(state) != self.selected_controller {
+                                    if self.selected_player.effective_controller_type(state, ctx) != self.selected_controller {
                                         state.sound_manager.play_sfx(12);
                                     } else {
                                         let (axis, value) = *active_axes.first().unwrap();

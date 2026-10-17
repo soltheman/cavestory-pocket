@@ -254,7 +254,7 @@
       "controller": {
         "entry": "Controller...",
         "keyboard": "Keyboard",
-        "touch_controls_or_keyboard": "Touch controls/Keyboard"
+        "touch_controls_or_keyboard": "Touch screen"
       },
       "rebind": "Rebind...",
       "rebind_menu": {

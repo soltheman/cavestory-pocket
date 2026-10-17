@@ -36,6 +36,10 @@ whether the phone vibrates (a tap when hurt, light taps during quakes; `src/fram
 "Move buttons..." lets you drag each one into place. The layout is saved in `user/settings.json`
 (`touch_layout`). `make_touch_art.ps1` regenerates the button art (`touch_icons.png`, `touch_plate.png`).
 
+A game controller (MFi, Xbox, PlayStation) works as player 1 as soon as it connects, and the touch
+buttons hide while one is. The Controls menu leaves out keyboard settings with touch controls on;
+player selection, the controller list and button rebinding show only while a controller is connected.
+
 To try the phone controls on a PC build, set `CAVESTORY_TOUCH=1` (the mouse acts as a finger) and
 start with `--window-width 1266 --window-height 585` for an iPhone-shaped window; `CAVESTORY_DATA_DIR`
 points at a copy of the game's `data` folder.

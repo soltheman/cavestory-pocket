@@ -14,6 +14,8 @@ pub struct TouchPlayerController {
     old_state: KeyState,
     trigger: KeyState,
     prev_touch_len: usize,
+    /// A game controller is connected: the touch buttons are hidden and ignored.
+    controller_connected: bool,
 }
 
 bitfield! {
@@ -37,12 +39,24 @@ bitfield! {
 
 impl TouchPlayerController {
     pub fn new() -> TouchPlayerController {
-        TouchPlayerController { state: KeyState(0), old_state: KeyState(0), trigger: KeyState(0), prev_touch_len: 0 }
+        TouchPlayerController {
+            state: KeyState(0),
+            old_state: KeyState(0),
+            trigger: KeyState(0),
+            prev_touch_len: 0,
+            controller_connected: false,
+        }
     }
 }
 
 impl PlayerController for TouchPlayerController {
     fn update(&mut self, state: &mut SharedGameState, ctx: &mut Context) -> GameResult {
+        self.controller_connected = !ctx.gamepad_context.get_gamepads().is_empty();
+        if self.controller_connected {
+            self.state.0 = 0;
+            return Ok(());
+        }
+
         let layout = &state.settings.touch_layout;
         let geometry = TouchGeometry::new(ctx, state.canvas_size, state.scale, layout);
 
@@ -262,7 +276,10 @@ impl PlayerController for TouchPlayerController {
     }
 
     fn set_rumble(&mut self, low_freq: u16, hi_freq: u16, _ticks: u32) {
-        // Only getting hurt rumbles the player's controller; on a phone that's one haptic tap.
-        crate::framework::haptics::hit(low_freq.max(hi_freq));
+        // Only getting hurt rumbles the player's controller; on a phone that's one haptic tap, unless a
+        // game controller is connected and rumbling instead.
+        if !self.controller_connected {
+            crate::framework::haptics::hit(low_freq.max(hi_freq));
+        }
     }
 }
