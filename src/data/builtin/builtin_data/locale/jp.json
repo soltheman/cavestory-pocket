@@ -203,7 +203,8 @@
           "inventory": "アイテム",
           "pause": "ポーズ",
           "prev_weapon": "まえ",
-          "next_weapon": "つぎ"
+          "next_weapon": "つぎ",
+          "map": "マップ"
         },
         "icons": {
           "entry": "アイコン：",
@@ -234,6 +235,8 @@
         },
         "weapon_buttons": "ぶきボタン：",
         "vibration": "しんどう：",
+        "map_button": "マップボタン：",
+        "button_taps": "ボタンのしんどう：",
         "text": {
           "dpad": "いどう",
           "jump": "ジャンプ",
@@ -242,6 +245,7 @@
           "pause": "ポーズ",
           "prev_weapon": "<ぶき",
           "next_weapon": "ぶき>",
+          "map": "マップ",
           "skip": "スキップ"
         }
       },

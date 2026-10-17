@@ -85,7 +85,9 @@ enum TouchMenuEntry {
     Shape,
     Dpad,
     WeaponButtons,
+    MapButton,
     Vibration,
+    ButtonTaps,
     Move,
     Reset,
     Back,
@@ -365,8 +367,16 @@ impl ControlsMenu {
             ),
         );
         self.touch.push_entry(
+            TouchMenuEntry::MapButton,
+            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.map_button").to_owned(), layout.map_button),
+        );
+        self.touch.push_entry(
             TouchMenuEntry::Vibration,
             MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.vibration").to_owned(), layout.vibration),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::ButtonTaps,
+            MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.button_taps").to_owned(), layout.button_taps),
         );
         self.touch.push_entry(
             TouchMenuEntry::Move,
@@ -1434,6 +1444,23 @@ impl ControlsMenu {
                     if let MenuEntry::Toggle(_, value) = toggle {
                         state.settings.touch_layout.weapon_buttons = !state.settings.touch_layout.weapon_buttons;
                         *value = state.settings.touch_layout.weapon_buttons;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::MapButton, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.map_button = !layout.map_button;
+                        *value = layout.map_button;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::ButtonTaps, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.button_taps = !layout.button_taps;
+                        *value = layout.button_taps;
+                        crate::framework::haptics::set_button_taps(layout.button_taps);
                         let _ = state.settings.save(ctx);
                     }
                 }

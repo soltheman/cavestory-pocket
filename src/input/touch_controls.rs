@@ -38,10 +38,11 @@ pub enum TouchButton {
     Pause,
     PrevWeapon,
     NextWeapon,
+    Map,
 }
 
 impl TouchButton {
-    pub const ALL: [TouchButton; 7] = [
+    pub const ALL: [TouchButton; 8] = [
         TouchButton::DPad,
         TouchButton::Jump,
         TouchButton::Shoot,
@@ -49,6 +50,7 @@ impl TouchButton {
         TouchButton::Pause,
         TouchButton::PrevWeapon,
         TouchButton::NextWeapon,
+        TouchButton::Map,
     ];
 
     /// The button's icon: its cell in the 4x4 icon layout, or one of the weapon icons in row 8.
@@ -61,6 +63,7 @@ impl TouchButton {
             TouchButton::Pause => Icon::Cell(1, 3),
             TouchButton::PrevWeapon => Icon::Weapon(false),
             TouchButton::NextWeapon => Icon::Weapon(true),
+            TouchButton::Map => Icon::Map,
         }
     }
 
@@ -74,6 +77,7 @@ impl TouchButton {
             TouchButton::Pause => "menus.controls_menu.touch_menu.text.pause",
             TouchButton::PrevWeapon => "menus.controls_menu.touch_menu.text.prev_weapon",
             TouchButton::NextWeapon => "menus.controls_menu.touch_menu.text.next_weapon",
+            TouchButton::Map => "menus.controls_menu.touch_menu.text.map",
         }
     }
 }
@@ -82,6 +86,7 @@ impl TouchButton {
 enum Icon {
     Cell(u16, u16),
     Weapon(bool),
+    Map,
 }
 
 /// Declares a settings enum with its menu order and the locale key of each value.
@@ -177,6 +182,10 @@ pub struct TouchLayout {
     pub dpad_style: TouchDpadStyle,
     /// Whether the previous/next weapon buttons are shown.
     pub weapon_buttons: bool,
+    /// Whether the Map button is shown.
+    pub map_button: bool,
+    /// A light tick when an on-screen button is pressed (phones only).
+    pub button_taps: bool,
     /// Haptic taps when the player is hurt and during quakes (phones only).
     pub vibration: bool,
     /// Button centres as fractions of the safe area; `None` keeps the default spot.
@@ -187,6 +196,7 @@ pub struct TouchLayout {
     pub pause: Option<(f32, f32)>,
     pub prev_weapon: Option<(f32, f32)>,
     pub next_weapon: Option<(f32, f32)>,
+    pub map: Option<(f32, f32)>,
 }
 
 impl Default for TouchLayout {
@@ -199,6 +209,8 @@ impl Default for TouchLayout {
             shape: TouchShape::Round,
             dpad_style: TouchDpadStyle::Arrows,
             weapon_buttons: true,
+            map_button: true,
+            button_taps: true,
             vibration: true,
             dpad: None,
             jump: None,
@@ -207,6 +219,7 @@ impl Default for TouchLayout {
             pause: None,
             prev_weapon: None,
             next_weapon: None,
+            map: None,
         }
     }
 }
@@ -224,6 +237,7 @@ impl TouchLayout {
             TouchButton::Pause => self.pause,
             TouchButton::PrevWeapon => self.prev_weapon,
             TouchButton::NextWeapon => self.next_weapon,
+            TouchButton::Map => self.map,
         }
     }
 
@@ -236,6 +250,7 @@ impl TouchLayout {
             TouchButton::Pause => self.pause = position,
             TouchButton::PrevWeapon => self.prev_weapon = position,
             TouchButton::NextWeapon => self.next_weapon = position,
+            TouchButton::Map => self.map = position,
         }
     }
 
@@ -245,12 +260,16 @@ impl TouchLayout {
         }
     }
 
-    /// The buttons on screen: all of them, minus the weapon buttons when they're turned off.
+    /// The buttons on screen: all of them, minus the weapon and map buttons when they're turned off.
     pub fn visible_buttons(&self) -> Vec<TouchButton> {
         TouchButton::ALL
             .iter()
             .copied()
-            .filter(|b| self.weapon_buttons || !matches!(b, TouchButton::PrevWeapon | TouchButton::NextWeapon))
+            .filter(|b| match b {
+                TouchButton::PrevWeapon | TouchButton::NextWeapon => self.weapon_buttons,
+                TouchButton::Map => self.map_button,
+                _ => true,
+            })
             .collect()
     }
 
@@ -309,6 +328,8 @@ impl TouchGeometry {
             // Just under the weapon HUD they switch.
             TouchButton::PrevWeapon => (left + m + w * 0.5, top + HUD_HEIGHT + w * 0.5),
             TouchButton::NextWeapon => (left + m * 2.0 + w * 1.5, top + HUD_HEIGHT + w * 0.5),
+            // Left of Pause, with the other menu buttons.
+            TouchButton::Map => (right - m * 3.0 - c * 2.5, top + m + c * 0.5),
         }
     }
 
@@ -619,6 +640,7 @@ impl TouchControls {
         let source = match icon {
             Icon::Cell(cx, cy) => Rect::new_size(cx * 32, cy * 32 + if bold { 128 } else { 0 }, 32, 32),
             Icon::Weapon(next) => Rect::new_size(if bold { 64 } else { 0 } + if next { 32 } else { 0 }, 256, 32, 32),
+            Icon::Map => Rect::new_size(if bold { 32 } else { 0 }, 288, 32, 32),
         };
         let icon_side = side * ICON / CELL;
 

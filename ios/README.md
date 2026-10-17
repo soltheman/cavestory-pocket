@@ -32,7 +32,8 @@ save. On a PC with `CAVESTORY_TOUCH=1`, minimising the window does the same, for
 
 Options > Controls > Touch controls sets the buttons' opacity, size, icons (Classic, Bold, Text),
 colour, backing shape, d-pad look (arrows or a stick), whether the weapon-switch buttons show and
-whether the phone vibrates (a tap when hurt, light taps during quakes; `src/framework/haptics.rs`), and
+whether the Map button shows, whether the phone vibrates (a tap when hurt, light taps during quakes) and
+whether pressing a button ticks (`src/framework/haptics.rs`), and
 "Move buttons..." lets you drag each one into place. The layout is saved in `user/settings.json`
 (`touch_layout`). `make_touch_art.ps1` regenerates the button art (`touch_icons.png`, `touch_plate.png`).
 

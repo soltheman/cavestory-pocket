@@ -351,6 +351,7 @@ impl SharedGameState {
         }
         crate::menu::set_touch_rows(settings.touch_controls);
         crate::framework::haptics::set_enabled(settings.touch_layout.vibration);
+        crate::framework::haptics::set_button_taps(settings.touch_layout.button_taps);
         let mod_requirements = ModRequirements::load(ctx)?;
 
         let vanilla_ext_exe = match option_env!("VANILLA_EXT_EXE") {

@@ -204,7 +204,8 @@
           "inventory": "Items",
           "pause": "Pause",
           "prev_weapon": "Prev gun",
-          "next_weapon": "Next gun"
+          "next_weapon": "Next gun",
+          "map": "Map"
         },
         "icons": {
           "entry": "Icons:",
@@ -235,6 +236,8 @@
         },
         "weapon_buttons": "Weapon buttons:",
         "vibration": "Vibration:",
+        "map_button": "Map button:",
+        "button_taps": "Button taps:",
         "text": {
           "dpad": "MOVE",
           "jump": "JUMP",
@@ -243,6 +246,7 @@
           "pause": "PAUSE",
           "prev_weapon": "<GUN",
           "next_weapon": "GUN>",
+          "map": "MAP",
           "skip": "SKIP"
         }
       },

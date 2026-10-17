@@ -16,6 +16,8 @@ pub struct TouchPlayerController {
     prev_touch_len: usize,
     /// A game controller is connected: the touch buttons are hidden and ignored.
     controller_connected: bool,
+    /// Last tick's on-screen presses, to tick the phone once per new press.
+    prev_pressed: KeyState,
 }
 
 bitfield! {
@@ -28,7 +30,7 @@ bitfield! {
     pub right, set_right: 1;
     pub up, set_up: 2;
     pub down, set_down: 3;
-    pub map, _: 4;
+    pub map, set_map: 4;
     pub inventory, set_inventory: 5;
     pub jump, set_jump: 6;
     pub shoot, set_shoot: 7;
@@ -45,6 +47,7 @@ impl TouchPlayerController {
             trigger: KeyState(0),
             prev_touch_len: 0,
             controller_connected: false,
+            prev_pressed: KeyState(0),
         }
     }
 }
@@ -61,8 +64,9 @@ impl PlayerController for TouchPlayerController {
         let geometry = TouchGeometry::new(ctx, state.canvas_size, state.scale, layout);
 
         match state.touch_controls.control_type {
-            TouchControlType::None => {}
+            TouchControlType::None => self.prev_pressed = KeyState(0),
             TouchControlType::Dialog => {
+                self.prev_pressed = KeyState(0);
                 self.state.set_jump(
                     state
                         .touch_controls
@@ -108,10 +112,24 @@ impl PlayerController for TouchPlayerController {
                             self.state.next_weapon() || point.is_in(geometry.rect(layout, TouchButton::NextWeapon)),
                         );
                     }
+
+                    if layout.map_button {
+                        self.state.set_map(self.state.map() || point.is_in(geometry.rect(layout, TouchButton::Map)));
+                    }
                 }
 
                 let inventory = geometry.rect(layout, TouchButton::Inventory);
                 self.state.set_inventory(state.touch_controls.consume_click_in(inventory));
+
+                // A tick for each new press, and when the d-pad changes direction.
+                const DIRECTIONS: u16 = 0b1111;
+                let (now, before) = (self.state.0, self.prev_pressed.0);
+                let new_press = now & !before & !DIRECTIONS != 0;
+                let turned = now & DIRECTIONS != 0 && now & DIRECTIONS != before & DIRECTIONS;
+                if new_press || turned {
+                    crate::framework::haptics::button();
+                }
+                self.prev_pressed = self.state;
             }
         }
 

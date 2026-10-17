@@ -38,28 +38,39 @@ pub fn open_url(url: &str) {
 }
 
 thread_local! {
-    /// UIKit's feedback generator, kept around so it stays warmed up between taps.
-    static IMPACT: std::cell::Cell<*mut Object> = std::cell::Cell::new(std::ptr::null_mut());
+    /// UIKit's feedback generators, kept around so they stay warmed up between taps.
+    static HEAVY: std::cell::Cell<*mut Object> = std::cell::Cell::new(std::ptr::null_mut());
+    static RIGID: std::cell::Cell<*mut Object> = std::cell::Cell::new(std::ptr::null_mut());
 }
 
-/// One haptic tap from a heavy impact generator; `intensity` is 0.0 to 1.0.
-pub fn haptic_impact(intensity: f32) {
-    const UI_IMPACT_FEEDBACK_STYLE_HEAVY: isize = 2;
+const UI_IMPACT_FEEDBACK_STYLE_HEAVY: isize = 2;
+const UI_IMPACT_FEEDBACK_STYLE_RIGID: isize = 4;
 
-    IMPACT.with(|cell| unsafe {
-        let mut generator = cell.get();
+fn impact(generator_cell: &std::cell::Cell<*mut Object>, style: isize, intensity: f32) {
+    unsafe {
+        let mut generator = generator_cell.get();
         if generator.is_null() {
             let alloc: *mut Object = msg_send![class!(UIImpactFeedbackGenerator), alloc];
-            generator = msg_send![alloc, initWithStyle: UI_IMPACT_FEEDBACK_STYLE_HEAVY];
+            generator = msg_send![alloc, initWithStyle: style];
             if generator.is_null() {
                 return;
             }
-            cell.set(generator);
+            generator_cell.set(generator);
         }
 
         let _: () = msg_send![generator, impactOccurredWithIntensity: intensity.clamp(0.0, 1.0) as f64];
         let _: () = msg_send![generator, prepare];
-    });
+    }
+}
+
+/// One haptic tap from a heavy impact generator; `intensity` is 0.0 to 1.0.
+pub fn haptic_impact(intensity: f32) {
+    HEAVY.with(|cell| impact(cell, UI_IMPACT_FEEDBACK_STYLE_HEAVY, intensity));
+}
+
+/// A short, crisp tick, for pressing an on-screen button.
+pub fn haptic_tick() {
+    RIGID.with(|cell| impact(cell, UI_IMPACT_FEEDBACK_STYLE_RIGID, 0.6));
 }
 
 /// Safe-area insets of the game's window in points, as (left, top, right, bottom).

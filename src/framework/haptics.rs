@@ -5,6 +5,7 @@ use std::cell::Cell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+static BUTTON_TAPS: AtomicBool = AtomicBool::new(true);
 
 /// Ticks between taps while a quake shakes the phone.
 const QUAKE_TAP_INTERVAL: u32 = 4;
@@ -33,6 +34,23 @@ fn tap(intensity: f32) {
 
     #[cfg(not(target_os = "ios"))]
     log::debug!("Haptic tap at {:.2}", intensity);
+}
+
+pub fn set_button_taps(enabled: bool) {
+    BUTTON_TAPS.store(enabled, Ordering::Relaxed);
+}
+
+/// An on-screen button was pressed: a light tick, so presses can be felt without looking.
+pub fn button() {
+    if !BUTTON_TAPS.load(Ordering::Relaxed) {
+        return;
+    }
+
+    #[cfg(target_os = "ios")]
+    crate::util::ios::haptic_tick();
+
+    #[cfg(not(target_os = "ios"))]
+    log::debug!("Haptic button tick");
 }
 
 /// The player got hurt: one firm tap, firmer the less health is left (rumble 0x4000 to 0x6000).
