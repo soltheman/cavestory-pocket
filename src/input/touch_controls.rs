@@ -197,6 +197,8 @@ pub struct TouchLayout {
     pub forgiving_buttons: bool,
     /// While Shoot is held, moving left or right doesn't turn the player around (strafing).
     pub lock_facing_on_shoot: bool,
+    /// Holding Shoot presses it over and over, for weapons that fire once per press.
+    pub auto_fire: bool,
     /// A light tick when an on-screen button is pressed (phones only).
     pub button_taps: bool,
     /// Haptic taps when the player is hurt and during quakes (phones only).
@@ -228,6 +230,7 @@ impl Default for TouchLayout {
             floating_stick: false,
             forgiving_buttons: true,
             lock_facing_on_shoot: false,
+            auto_fire: false,
             button_taps: true,
             vibration: true,
             dpad: None,
@@ -521,6 +524,8 @@ pub struct TouchControls {
     pub has_map: bool,
     /// The Strafe button's lock is on: moving doesn't turn the player, and the button stays lit.
     pub strafe_locked: bool,
+    /// The current weapon fires or charges while Shoot is held, so auto-fire leaves it alone.
+    pub hold_to_fire: bool,
     pub touch_id_counter: u64,
     /// Touches that just went down; gameplay reacts on press.
     pub clicks: Vec<TouchPoint>,
@@ -536,6 +541,7 @@ impl TouchControls {
             interact_icon: false,
             has_map: false,
             strafe_locked: false,
+            hold_to_fire: false,
             touch_id_counter: 0,
             clicks: Vec::with_capacity(8),
             taps: Vec::with_capacity(8),

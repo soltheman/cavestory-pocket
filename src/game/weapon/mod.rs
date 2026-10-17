@@ -162,6 +162,16 @@ impl Weapon {
         self.experience = 0;
     }
 
+    /// Whether holding Shoot keeps this weapon firing or charging (Machine Gun, Spur, and the Bubbler
+    /// from level 2, whose level 3 bubbles fly off on release) instead of firing once per press.
+    pub fn fires_while_held(&self) -> bool {
+        match self.wtype {
+            WeaponType::MachineGun | WeaponType::Spur => true,
+            WeaponType::Bubbler => self.level != WeaponLevel::Level1,
+            _ => false,
+        }
+    }
+
     pub fn tick(
         &mut self,
         state: &mut SharedGameState,

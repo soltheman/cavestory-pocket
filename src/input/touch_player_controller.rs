@@ -7,6 +7,9 @@ use crate::game::shared_game_state::SharedGameState;
 use crate::input::player_controller::PlayerController;
 use crate::input::touch_controls::{TouchButton, TouchControlType, TouchGeometry};
 
+/// Ticks per auto-fire press: down for half of them, up for the rest.
+const AUTO_FIRE_PERIOD: u16 = 6;
+
 /// A no-op implementation of player controller.
 #[derive(Clone)]
 pub struct TouchPlayerController {
@@ -21,6 +24,8 @@ pub struct TouchPlayerController {
     /// Moving doesn't turn the player: the Strafe button's lock is on, or Shoot is held with
     /// "Lock facing while shooting" on.
     strafe: bool,
+    /// Where a held Shoot is in its auto-fire press, in ticks.
+    auto_fire_ticks: u16,
 }
 
 bitfield! {
@@ -52,6 +57,7 @@ impl TouchPlayerController {
             controller_connected: false,
             prev_pressed: KeyState(0),
             strafe: false,
+            auto_fire_ticks: 0,
         }
     }
 }
@@ -154,6 +160,15 @@ impl PlayerController for TouchPlayerController {
                     crate::framework::haptics::button();
                 }
                 self.prev_pressed = self.state;
+
+                // Auto-fire: a held Shoot acts like tapping it fast (8 presses a second at 50 ticks), except
+                // for weapons that already use holding. The strafe lock and haptics above see the held button.
+                if layout.auto_fire && self.state.shoot() && !state.touch_controls.hold_to_fire {
+                    self.state.set_shoot(self.auto_fire_ticks % AUTO_FIRE_PERIOD < AUTO_FIRE_PERIOD / 2);
+                    self.auto_fire_ticks = (self.auto_fire_ticks + 1) % AUTO_FIRE_PERIOD;
+                } else {
+                    self.auto_fire_ticks = 0;
+                }
             }
         }
 

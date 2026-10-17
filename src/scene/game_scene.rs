@@ -1050,6 +1050,11 @@ impl Scene for GameScene {
             state.player_count_modified_in_game = false;
         }
 
+        if state.settings.touch_controls {
+            state.touch_controls.hold_to_fire =
+                self.inventory_player1.get_current_weapon().map_or(false, |weapon| weapon.fires_while_held());
+        }
+
         self.player1.controller.update(state, ctx)?;
         self.player1.controller.update_trigger();
         self.player2.controller.update(state, ctx)?;
