@@ -237,6 +237,7 @@
         "weapon_buttons": "Weapon buttons:",
         "floating_stick": "Floating stick:",
         "forgiving_buttons": "Forgiving buttons:",
+        "lock_facing_on_shoot": "Lock facing while shooting:",
         "vibration": "Vibration:",
         "map_button": "Map button:",
         "button_taps": "Button taps:",

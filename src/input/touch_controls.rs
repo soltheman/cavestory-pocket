@@ -188,6 +188,8 @@ pub struct TouchLayout {
     pub floating_stick: bool,
     /// Buttons' touch areas reach a little past their drawings.
     pub forgiving_buttons: bool,
+    /// While Shoot is held, moving left or right doesn't turn the player around (strafing).
+    pub lock_facing_on_shoot: bool,
     /// A light tick when an on-screen button is pressed (phones only).
     pub button_taps: bool,
     /// Haptic taps when the player is hurt and during quakes (phones only).
@@ -216,6 +218,7 @@ impl Default for TouchLayout {
             map_button: true,
             floating_stick: false,
             forgiving_buttons: true,
+            lock_facing_on_shoot: false,
             button_taps: true,
             vibration: true,
             dpad: None,

@@ -18,6 +18,8 @@ pub struct TouchPlayerController {
     controller_connected: bool,
     /// Last tick's on-screen presses, to tick the phone once per new press.
     prev_pressed: KeyState,
+    /// Moving doesn't turn the player: Shoot is held with "Lock facing while shooting" on.
+    strafe: bool,
 }
 
 bitfield! {
@@ -48,6 +50,7 @@ impl TouchPlayerController {
             prev_touch_len: 0,
             controller_connected: false,
             prev_pressed: KeyState(0),
+            strafe: false,
         }
     }
 }
@@ -55,6 +58,7 @@ impl TouchPlayerController {
 impl PlayerController for TouchPlayerController {
     fn update(&mut self, state: &mut SharedGameState, ctx: &mut Context) -> GameResult {
         self.controller_connected = !ctx.gamepad_context.get_gamepads().is_empty();
+        self.strafe = false;
         if self.controller_connected {
             self.state.0 = 0;
             return Ok(());
@@ -123,6 +127,8 @@ impl PlayerController for TouchPlayerController {
                         == Some(TouchButton::Inventory)
                 }));
 
+                self.strafe = layout.lock_facing_on_shoot && self.state.shoot();
+
                 // A tick for each new press, and when the d-pad changes direction.
                 const DIRECTIONS: u16 = 0b1111;
                 let (now, before) = (self.state.0, self.prev_pressed.0);
@@ -190,8 +196,7 @@ impl PlayerController for TouchPlayerController {
     }
 
     fn strafe(&self) -> bool {
-        // TODO
-        false
+        self.strafe
     }
 
     fn trigger_up(&self) -> bool {
@@ -239,7 +244,8 @@ impl PlayerController for TouchPlayerController {
     }
 
     fn trigger_strafe(&self) -> bool {
-        // TODO
+        // Touch strafing only holds the facing. A strafe press while holding up latches looking up
+        // (for a held Strafe key), which would keep Shoot aiming up after the thumb leaves up.
         false
     }
 

@@ -236,6 +236,7 @@
         "weapon_buttons": "ぶきボタン：",
         "floating_stick": "うごくスティック：",
         "forgiving_buttons": "ひろいボタン判定：",
+        "lock_facing_on_shoot": "ショット中はむきをこてい：",
         "vibration": "しんどう：",
         "map_button": "マップボタン：",
         "button_taps": "ボタンのしんどう：",

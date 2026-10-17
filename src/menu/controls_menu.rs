@@ -86,6 +86,7 @@ enum TouchMenuEntry {
     Dpad,
     FloatingStick,
     ForgivingButtons,
+    LockFacingOnShoot,
     WeaponButtons,
     MapButton,
     Vibration,
@@ -373,6 +374,13 @@ impl ControlsMenu {
             MenuEntry::Toggle(
                 state.loc.t("menus.controls_menu.touch_menu.forgiving_buttons").to_owned(),
                 layout.forgiving_buttons,
+            ),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::LockFacingOnShoot,
+            MenuEntry::Toggle(
+                state.loc.t("menus.controls_menu.touch_menu.lock_facing_on_shoot").to_owned(),
+                layout.lock_facing_on_shoot,
             ),
         );
         self.touch.push_entry(
@@ -1476,6 +1484,18 @@ impl ControlsMenu {
                         let layout = &mut state.settings.touch_layout;
                         layout.forgiving_buttons = !layout.forgiving_buttons;
                         *value = layout.forgiving_buttons;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::LockFacingOnShoot, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.lock_facing_on_shoot = !layout.lock_facing_on_shoot;
+                        *value = layout.lock_facing_on_shoot;
+                        // Strafing only works with Behavior > Allow strafe on.
+                        if layout.lock_facing_on_shoot {
+                            state.settings.allow_strafe = true;
+                        }
                         let _ = state.settings.save(ctx);
                     }
                 }
