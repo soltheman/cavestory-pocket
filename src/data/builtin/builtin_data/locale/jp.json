@@ -204,7 +204,8 @@
           "pause": "ポーズ",
           "prev_weapon": "まえ",
           "next_weapon": "つぎ",
-          "map": "マップ"
+          "map": "マップ",
+          "strafe": "ストレイフ"
         },
         "icons": {
           "entry": "アイコン：",
@@ -239,6 +240,7 @@
         "lock_facing_on_shoot": "ショット中はむきをこてい：",
         "vibration": "しんどう：",
         "map_button": "マップボタン：",
+        "strafe_button": "ストレイフボタン：",
         "button_taps": "ボタンのしんどう：",
         "text": {
           "dpad": "いどう",
@@ -249,6 +251,7 @@
           "prev_weapon": "<ぶき",
           "next_weapon": "ぶき>",
           "map": "マップ",
+          "strafe": "ロック",
           "skip": "スキップ"
         }
       },

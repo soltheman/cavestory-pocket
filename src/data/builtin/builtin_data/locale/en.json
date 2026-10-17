@@ -205,7 +205,8 @@
           "pause": "Pause",
           "prev_weapon": "Prev gun",
           "next_weapon": "Next gun",
-          "map": "Map"
+          "map": "Map",
+          "strafe": "Strafe"
         },
         "icons": {
           "entry": "Icons:",
@@ -240,6 +241,7 @@
         "lock_facing_on_shoot": "Lock facing while shooting:",
         "vibration": "Vibration:",
         "map_button": "Map button:",
+        "strafe_button": "Strafe button:",
         "button_taps": "Button taps:",
         "text": {
           "dpad": "MOVE",
@@ -250,6 +252,7 @@
           "prev_weapon": "<GUN",
           "next_weapon": "GUN>",
           "map": "MAP",
+          "strafe": "LOCK",
           "skip": "SKIP"
         }
       },

@@ -2,7 +2,7 @@
 #   touch_icons.png  128x320, 32px cells. Rows 0-3: doukutsu-rs's touch.png icons recoloured white.
 #                    Rows 4-7: the same layout in a bold filled style. Row 8: weapon switching
 #                    (classic previous, classic next, bold previous, bold next). Row 9: map
-#                    (classic, bold).
+#                    (classic, bold), then the strafe lock padlock (classic, bold).
 #   touch_plate.png   96x96, 48px cells: round backing, solid round, square backing, solid square.
 #   powershell -NoProfile -ExecutionPolicy Bypass -File ios/make_touch_art.ps1
 param([string]$Dir = "$PSScriptRoot\..\src\data\builtin")
@@ -104,6 +104,12 @@ $prev = @{ add = @(, @('t', 2, 16, 10, 8, 10, 24)) + $gunRight.add; cut = $gunRi
 $next = @{ add = @(, @('t', 30, 16, 22, 8, 22, 24)) + $gunLeft.add; cut = $gunLeft.cut }
 # A map folded in three panels, the middle one lower, with a pin in it.
 $map = @{ add = @(@('r', 5, 7, 11, 22), @('r', 13, 9, 18, 24), @('r', 20, 7, 26, 22)); cut = @(@('r', 14, 12, 17, 15), @('t', 14, 15, 18, 15, 16, 19)) }
+# A padlock for the strafe lock: shackle with rounded top corners, body, keyhole.
+$lock = @{
+    add = @(@('r', 12, 3, 19, 5), @('r', 10, 5, 12, 13), @('r', 19, 5, 21, 13), @('r', 11, 4, 11, 4), @('r', 20, 4, 20, 4),
+        @('r', 7, 13, 24, 27))
+    cut = @(, @('r', 15, 18, 16, 22))
+}
 
 $atlas = New-Object System.Drawing.Bitmap 128, 320, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
 
@@ -133,6 +139,9 @@ foreach ($i in 0, 1) {
 $m = Mask $map
 DrawClassic $atlas 0 288 $m
 DrawBold $atlas 32 288 $m
+$m = Mask $lock
+DrawClassic $atlas 64 288 $m
+DrawBold $atlas 96 288 $m
 $atlas.Save((Join-Path $Dir "touch_icons.png"), [System.Drawing.Imaging.ImageFormat]::Png)
 $atlas.Dispose()
 

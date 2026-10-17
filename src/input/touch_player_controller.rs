@@ -18,7 +18,8 @@ pub struct TouchPlayerController {
     controller_connected: bool,
     /// Last tick's on-screen presses, to tick the phone once per new press.
     prev_pressed: KeyState,
-    /// Moving doesn't turn the player: Shoot is held with "Lock facing while shooting" on.
+    /// Moving doesn't turn the player: the Strafe button's lock is on, or Shoot is held with
+    /// "Lock facing while shooting" on.
     strafe: bool,
 }
 
@@ -127,7 +128,22 @@ impl PlayerController for TouchPlayerController {
                         == Some(TouchButton::Inventory)
                 }));
 
-                self.strafe = layout.lock_facing_on_shoot && self.state.shoot();
+                // Each new press on the Strafe button turns its lock on or off.
+                if layout.strafe_button
+                    && state.touch_controls.consume_click_where(|p| {
+                        geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, has_map)
+                            == Some(TouchButton::Strafe)
+                    })
+                {
+                    state.touch_controls.strafe_locked = !state.touch_controls.strafe_locked;
+                    crate::framework::haptics::button();
+                }
+
+                // Pressing only down still examines things and opens doors (a held strafe blocks that), and
+                // the facing can't change then anyway.
+                let locked = layout.strafe_button && state.touch_controls.strafe_locked;
+                let down_only = self.state.down() && !self.state.left() && !self.state.right() && !self.state.up();
+                self.strafe = (locked || (layout.lock_facing_on_shoot && self.state.shoot())) && !down_only;
 
                 // A tick for each new press, and when the d-pad changes direction.
                 const DIRECTIONS: u16 = 0b1111;

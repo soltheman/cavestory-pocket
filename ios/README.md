@@ -33,8 +33,9 @@ save. On a PC with `CAVESTORY_TOUCH=1`, minimising the window does the same, for
 Options > Controls > Touch controls sets the buttons' opacity, size, icons (Classic, Bold, Text),
 colour, backing shape, d-pad look (arrows or a stick), a floating stick (it appears under the left
 thumb anywhere on the left half), forgiving buttons (touch areas a quarter wider than drawn, closest
-button wins), whether the weapon-switch buttons show and
-whether the Map button shows, whether the phone vibrates (a tap when hurt, light taps during quakes) and
+button wins), lock facing while shooting (holding Shoot strafes: moving doesn't turn Quote), whether
+the weapon-switch buttons show, whether the Map button shows, whether a Strafe button shows (a tap
+locks Quote's facing until the next tap; it stays lit meanwhile), whether the phone vibrates (a tap when hurt, light taps during quakes) and
 whether pressing a button ticks (`src/framework/haptics.rs`), and
 "Move buttons..." lets you drag each one into place. The layout is saved in `user/settings.json`
 (`touch_layout`). `make_touch_art.ps1` regenerates the button art (`touch_icons.png`, `touch_plate.png`).

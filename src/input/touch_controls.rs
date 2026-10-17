@@ -39,10 +39,11 @@ pub enum TouchButton {
     PrevWeapon,
     NextWeapon,
     Map,
+    Strafe,
 }
 
 impl TouchButton {
-    pub const ALL: [TouchButton; 8] = [
+    pub const ALL: [TouchButton; 9] = [
         TouchButton::DPad,
         TouchButton::Jump,
         TouchButton::Shoot,
@@ -51,9 +52,10 @@ impl TouchButton {
         TouchButton::PrevWeapon,
         TouchButton::NextWeapon,
         TouchButton::Map,
+        TouchButton::Strafe,
     ];
 
-    /// The button's icon: its cell in the 4x4 icon layout, or one of the weapon icons in row 8.
+    /// The button's icon: its cell in the 4x4 icon layout, or one of the weapon, map or lock icons in rows 8-9.
     fn icon(self) -> Icon {
         match self {
             TouchButton::DPad => Icon::Cell(1, 1),
@@ -64,6 +66,7 @@ impl TouchButton {
             TouchButton::PrevWeapon => Icon::Weapon(false),
             TouchButton::NextWeapon => Icon::Weapon(true),
             TouchButton::Map => Icon::Map,
+            TouchButton::Strafe => Icon::Lock,
         }
     }
 
@@ -78,6 +81,7 @@ impl TouchButton {
             TouchButton::PrevWeapon => "menus.controls_menu.touch_menu.text.prev_weapon",
             TouchButton::NextWeapon => "menus.controls_menu.touch_menu.text.next_weapon",
             TouchButton::Map => "menus.controls_menu.touch_menu.text.map",
+            TouchButton::Strafe => "menus.controls_menu.touch_menu.text.strafe",
         }
     }
 }
@@ -87,6 +91,7 @@ enum Icon {
     Cell(u16, u16),
     Weapon(bool),
     Map,
+    Lock,
 }
 
 /// Declares a settings enum with its menu order and the locale key of each value.
@@ -184,6 +189,8 @@ pub struct TouchLayout {
     pub weapon_buttons: bool,
     /// Whether the Map button is shown.
     pub map_button: bool,
+    /// Whether the Strafe button is shown; a tap turns the strafe lock on or off.
+    pub strafe_button: bool,
     /// The d-pad appears wherever the left thumb lands on the left half of the screen.
     pub floating_stick: bool,
     /// Buttons' touch areas reach a little past their drawings.
@@ -203,6 +210,7 @@ pub struct TouchLayout {
     pub prev_weapon: Option<(f32, f32)>,
     pub next_weapon: Option<(f32, f32)>,
     pub map: Option<(f32, f32)>,
+    pub strafe: Option<(f32, f32)>,
 }
 
 impl Default for TouchLayout {
@@ -216,6 +224,7 @@ impl Default for TouchLayout {
             dpad_style: TouchDpadStyle::Arrows,
             weapon_buttons: true,
             map_button: true,
+            strafe_button: false,
             floating_stick: false,
             forgiving_buttons: true,
             lock_facing_on_shoot: false,
@@ -229,6 +238,7 @@ impl Default for TouchLayout {
             prev_weapon: None,
             next_weapon: None,
             map: None,
+            strafe: None,
         }
     }
 }
@@ -247,6 +257,7 @@ impl TouchLayout {
             TouchButton::PrevWeapon => self.prev_weapon,
             TouchButton::NextWeapon => self.next_weapon,
             TouchButton::Map => self.map,
+            TouchButton::Strafe => self.strafe,
         }
     }
 
@@ -260,6 +271,7 @@ impl TouchLayout {
             TouchButton::PrevWeapon => self.prev_weapon = position,
             TouchButton::NextWeapon => self.next_weapon = position,
             TouchButton::Map => self.map = position,
+            TouchButton::Strafe => self.strafe = position,
         }
     }
 
@@ -269,7 +281,7 @@ impl TouchLayout {
         }
     }
 
-    /// The buttons on screen: all of them, minus the weapon and map buttons when they're turned off.
+    /// The buttons on screen: all of them, minus the weapon, map and strafe buttons when they're turned off.
     pub fn visible_buttons(&self) -> Vec<TouchButton> {
         TouchButton::ALL
             .iter()
@@ -277,6 +289,7 @@ impl TouchLayout {
             .filter(|b| match b {
                 TouchButton::PrevWeapon | TouchButton::NextWeapon => self.weapon_buttons,
                 TouchButton::Map => self.map_button,
+                TouchButton::Strafe => self.strafe_button,
                 _ => true,
             })
             .collect()
@@ -339,6 +352,8 @@ impl TouchGeometry {
             TouchButton::NextWeapon => (left + m * 2.0 + w * 1.5, top + HUD_HEIGHT + w * 0.5),
             // Left of Pause, with the other menu buttons.
             TouchButton::Map => (right - m * 3.0 - c * 2.5, top + m + c * 0.5),
+            // Left of Shoot, a short reach from Jump for the right thumb.
+            TouchButton::Strafe => (right - m * 2.0 - c * 1.5, bottom - m * 2.0 - c * 1.5),
         }
     }
 
@@ -504,6 +519,8 @@ pub struct TouchControls {
     pub interact_icon: bool,
     /// Whether the player owns the Map System; the Map button only shows in game once they do.
     pub has_map: bool,
+    /// The Strafe button's lock is on: moving doesn't turn the player, and the button stays lit.
+    pub strafe_locked: bool,
     pub touch_id_counter: u64,
     /// Touches that just went down; gameplay reacts on press.
     pub clicks: Vec<TouchPoint>,
@@ -518,6 +535,7 @@ impl TouchControls {
             points: Vec::with_capacity(8),
             interact_icon: false,
             has_map: false,
+            strafe_locked: false,
             touch_id_counter: 0,
             clicks: Vec::with_capacity(8),
             taps: Vec::with_capacity(8),
@@ -652,6 +670,7 @@ impl TouchControls {
                 self.draw_dpad(geometry, layout, highlight == Some(button), art, ctx)?;
             } else {
                 let held = highlight == Some(button)
+                    || (button == TouchButton::Strafe && self.strafe_locked)
                     || self.points.iter().any(|p| {
                         geometry.dpad_anchor(layout, p).filter(|_| layout.floating_stick).is_none()
                             && geometry.button_at(layout, p.position.0 as f32, p.position.1 as f32, !in_game || self.has_map)
@@ -732,6 +751,7 @@ impl TouchControls {
             Icon::Cell(cx, cy) => Rect::new_size(cx * 32, cy * 32 + if bold { 128 } else { 0 }, 32, 32),
             Icon::Weapon(next) => Rect::new_size(if bold { 64 } else { 0 } + if next { 32 } else { 0 }, 256, 32, 32),
             Icon::Map => Rect::new_size(if bold { 32 } else { 0 }, 288, 32, 32),
+            Icon::Lock => Rect::new_size(if bold { 96 } else { 64 }, 288, 32, 32),
         };
         let icon_side = side * ICON / CELL;
 

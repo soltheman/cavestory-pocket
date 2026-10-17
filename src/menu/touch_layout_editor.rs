@@ -43,6 +43,7 @@ impl TouchLayoutEditor {
             TouchButton::PrevWeapon => "menus.controls_menu.touch_menu.labels.prev_weapon",
             TouchButton::NextWeapon => "menus.controls_menu.touch_menu.labels.next_weapon",
             TouchButton::Map => "menus.controls_menu.touch_menu.labels.map",
+            TouchButton::Strafe => "menus.controls_menu.touch_menu.labels.strafe",
         })
     }
 

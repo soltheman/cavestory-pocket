@@ -89,6 +89,7 @@ enum TouchMenuEntry {
     LockFacingOnShoot,
     WeaponButtons,
     MapButton,
+    StrafeButton,
     Vibration,
     ButtonTaps,
     Move,
@@ -393,6 +394,13 @@ impl ControlsMenu {
         self.touch.push_entry(
             TouchMenuEntry::MapButton,
             MenuEntry::Toggle(state.loc.t("menus.controls_menu.touch_menu.map_button").to_owned(), layout.map_button),
+        );
+        self.touch.push_entry(
+            TouchMenuEntry::StrafeButton,
+            MenuEntry::Toggle(
+                state.loc.t("menus.controls_menu.touch_menu.strafe_button").to_owned(),
+                layout.strafe_button,
+            ),
         );
         self.touch.push_entry(
             TouchMenuEntry::Vibration,
@@ -1504,6 +1512,19 @@ impl ControlsMenu {
                         let layout = &mut state.settings.touch_layout;
                         layout.map_button = !layout.map_button;
                         *value = layout.map_button;
+                        let _ = state.settings.save(ctx);
+                    }
+                }
+                MenuSelectionResult::Selected(TouchMenuEntry::StrafeButton, toggle) => {
+                    if let MenuEntry::Toggle(_, value) = toggle {
+                        let layout = &mut state.settings.touch_layout;
+                        layout.strafe_button = !layout.strafe_button;
+                        *value = layout.strafe_button;
+                        // The button starts unlocked, and strafing needs Behavior > Allow strafe.
+                        state.touch_controls.strafe_locked = false;
+                        if layout.strafe_button {
+                            state.settings.allow_strafe = true;
+                        }
                         let _ = state.settings.save(ctx);
                     }
                 }
